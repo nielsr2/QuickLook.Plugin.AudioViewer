@@ -24,7 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="QuickLook.Plugin.Metadata.Base.config">
+    <!-- QuickLook's installer reads this exact filename from the .qlplugin zip
+         and parses /Metadata/Version. It must be QuickLook.Plugin.Metadata.config
+         (NOT *.Base.config, which is only upstream's version-stamping template). -->
+    <None Update="QuickLook.Plugin.Metadata.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
