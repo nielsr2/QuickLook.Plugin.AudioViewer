@@ -1,0 +1,14 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+
+# Packaging
+*.qlplugin
+
+# IDE
+.vs/
+.idea/
+*.suo
