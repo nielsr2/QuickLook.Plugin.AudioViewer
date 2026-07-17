@@ -52,6 +52,9 @@
             <DropShadowEffect Color="#000000" BlurRadius="10" ShadowDepth="2" Opacity="0.5"/>
           </Border.Effect>
           <StackPanel Width="180">
+            <CheckBox x:Name="FileInfoCheck" Content="Show file info" Foreground="#FFDDDDDD"
+                      Margin="0,0,0,10" Checked="FileInfoCheck_Changed" Unchecked="FileInfoCheck_Changed"/>
+
             <TextBlock Text="Layout" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
             <ComboBox x:Name="LayoutCombo" Margin="0,0,0,8" SelectionChanged="LayoutCombo_Changed">
               <ComboBoxItem Content="Stacked"/>
@@ -128,6 +131,16 @@
       <TextBlock x:Name="StatusText" Foreground="#FFBBBBBB"
                  HorizontalAlignment="Center" VerticalAlignment="Center"
                  Text="Loading…"/>
+
+      <!-- File-info overlay (toggled from settings). Click-through so it never
+           blocks scrolling/clicks on the timeline beneath it. -->
+      <Border x:Name="FileInfoPanel" HorizontalAlignment="Left" VerticalAlignment="Top"
+              Margin="8" Padding="9,7" CornerRadius="3" Background="#CC000000"
+              BorderBrush="#40FFFFFF" BorderThickness="1"
+              Visibility="Collapsed" IsHitTestVisible="False">
+        <TextBlock x:Name="FileInfoText" Foreground="#FFEDEDED"
+                   FontFamily="Consolas, Courier New" FontSize="11"/>
+      </Border>
     </Grid>
 
     <!-- Toggle button -->

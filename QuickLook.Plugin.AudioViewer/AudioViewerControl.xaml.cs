@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -62,6 +64,7 @@ namespace QuickLook.Plugin.AudioViewer
         private void InitSettingsControls()
         {
             _initializingSettings = true;
+            FileInfoCheck.IsChecked = PluginSettings.ShowFileInfo;
             LayoutCombo.SelectedIndex = (int)PluginSettings.Layout;
             FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
             AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
@@ -79,10 +82,12 @@ namespace QuickLook.Plugin.AudioViewer
             {
                 WaveStream playbackStream = null;
                 WaveformData waveform = null;
+                string infoText = null;
 
                 await Task.Run(() =>
                 {
                     playbackStream = AudioReaderFactory.Create(_path);
+                    infoText = BuildFileInfo(_path, playbackStream);
                     using (var scan = AudioReaderFactory.Create(_path))
                         waveform = WaveformData.Compute(scan, TimelineColumns(scan.TotalTime.TotalSeconds));
                 });
@@ -93,6 +98,8 @@ namespace QuickLook.Plugin.AudioViewer
 
                 Waveform.Waveform = waveform;
                 SetTimelineWidth(_player.Duration.TotalSeconds);
+                FileInfoText.Text = infoText;
+                FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
                 StatusText.Visibility = Visibility.Collapsed;
                 UpdateTimeText();
 
@@ -187,6 +194,13 @@ namespace QuickLook.Plugin.AudioViewer
         private void AutoPlayCheck_Changed(object sender, RoutedEventArgs e)
         {
             PluginSettings.AutoPlay = AutoPlayCheck.IsChecked == true;
+        }
+
+        private void FileInfoCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.ShowFileInfo = FileInfoCheck.IsChecked == true;
+            FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void LayoutCombo_Changed(object sender, SelectionChangedEventArgs e)
@@ -411,6 +425,49 @@ namespace QuickLook.Plugin.AudioViewer
             SpectrogramPlayhead.Visibility =
                 (SpectrogramImage.Visibility == Visibility.Visible && _spectrogramBuilt)
                     ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>Gather a human-readable summary of the audio file for the info overlay.</summary>
+        private static string BuildFileInfo(string path, WaveStream stream)
+        {
+            var fi = new FileInfo(path);
+            var wf = stream.WaveFormat;
+            double secs = stream.TotalTime.TotalSeconds;
+
+            string ext = Path.GetExtension(path).TrimStart('.').ToUpperInvariant();
+            string format = ext;
+            if (stream is AiffReader ar)
+                format = "AIFF-C (" + ar.Compression + ")";
+
+            string channels = wf.Channels == 1 ? "1 (Mono)"
+                : wf.Channels == 2 ? "2 (Stereo)" : wf.Channels.ToString();
+            long fileKbps = secs > 0 ? (long)(fi.Length * 8 / secs / 1000) : 0;
+            long pcmKbps = (long)wf.AverageBytesPerSecond * 8 / 1000;
+            long sampleFrames = stream.BlockAlign > 0 ? stream.Length / stream.BlockAlign : 0;
+
+            var sb = new StringBuilder();
+            void L(string k, string v) => sb.AppendLine(k.PadRight(13) + v);
+            L("File", fi.Name);
+            L("Size", FormatSize(fi.Length));
+            L("Format", format);
+            L("Decoder", stream.GetType().Name);
+            L("Duration", stream.TotalTime.ToString(@"hh\:mm\:ss\.fff"));
+            L("Sample rate", wf.SampleRate.ToString("N0") + " Hz");
+            L("Channels", channels);
+            L("Bit depth", wf.BitsPerSample + "-bit");
+            L("Encoding", wf.Encoding.ToString());
+            L("Bitrate", "~" + fileKbps.ToString("N0") + " kbps (file)");
+            if (pcmKbps > 0) L("PCM rate", pcmKbps.ToString("N0") + " kbps");
+            L("Samples", sampleFrames.ToString("N0") + " frames");
+            return sb.ToString().TrimEnd();
+        }
+
+        private static string FormatSize(long bytes)
+        {
+            if (bytes >= 1L << 30) return (bytes / (double)(1L << 30)).ToString("0.00") + " GB";
+            if (bytes >= 1L << 20) return (bytes / (double)(1L << 20)).ToString("0.0") + " MB";
+            if (bytes >= 1L << 10) return (bytes / (double)(1L << 10)).ToString("0.0") + " KB";
+            return bytes + " B";
         }
 
         public void Unload()

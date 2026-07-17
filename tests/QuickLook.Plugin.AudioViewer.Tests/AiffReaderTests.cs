@@ -23,6 +23,7 @@ namespace QuickLook.Plugin.AudioViewer.Tests
                     Assert.InRange(r.WaveFormat.SampleRate, 44099, 44101);
                     Assert.Equal(channels, r.WaveFormat.Channels);
                     Assert.Equal(32, r.WaveFormat.BitsPerSample);
+                    Assert.Equal("fl32", r.Compression);
                     Assert.InRange(r.TotalTime.TotalSeconds, 0.45, 0.55);
                     Assert.InRange(Peak(r.ToSampleProvider()), 0.85f, 0.95f); // endian-swap correct
                 }
@@ -57,6 +58,7 @@ namespace QuickLook.Plugin.AudioViewer.Tests
                     Assert.Equal(WaveFormatEncoding.Pcm, r.WaveFormat.Encoding);
                     Assert.Equal(16, r.WaveFormat.BitsPerSample);
                     Assert.Equal(1, r.WaveFormat.Channels);
+                    Assert.Equal("NONE", r.Compression);
                     Assert.InRange(Peak(r.ToSampleProvider()), 0.75f, 0.85f);
                 }
             }

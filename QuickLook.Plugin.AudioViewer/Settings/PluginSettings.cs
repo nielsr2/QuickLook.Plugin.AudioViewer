@@ -13,6 +13,13 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("AutoPlay", value, Domain);
         }
 
+        /// <summary>Show the file-info overlay (format, channels, bitrate, …).</summary>
+        public static bool ShowFileInfo
+        {
+            get => SettingHelper.Get("ShowFileInfo", false, Domain);
+            set => SettingHelper.Set("ShowFileInfo", value, Domain);
+        }
+
         // Enum settings are stored as their string name: SettingHelper round-trips
         // primitives via Convert.ChangeType, which cannot parse enum names (it would
         // silently fall back to the default). Enum.TryParse on the stored name restores

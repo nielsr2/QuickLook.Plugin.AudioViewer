@@ -17,6 +17,8 @@ A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
 - **FFT size** — 512 / 1024 / 2048 / 4096 (time-vs-frequency resolution).
 - **Max frequency** — Full / 20 kHz / 10 kHz / 5 kHz.
 - **Contrast** — dB-floor slider.
+- **Show file info** — a top-left overlay with the file's format, decoder, sample
+  rate, channels, bit depth, encoding, bitrate, and duration.
 
 Display changes re-render instantly from cached FFT data; only an FFT-size change
 recomputes the transform.

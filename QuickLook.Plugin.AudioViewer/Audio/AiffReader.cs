@@ -22,6 +22,9 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         private readonly bool _signed8;       // AIFF 8-bit PCM is signed; WAV is unsigned
         private long _position;
 
+        /// <summary>AIFF-C compression 4CC (e.g. "fl32", "sowt"); "NONE" for plain AIFF.</summary>
+        public string Compression { get; private set; }
+
         public AiffReader(string path)
         {
             _fs = File.OpenRead(path);
@@ -104,6 +107,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             _dataLength = framesBytes > 0 ? Math.Min(framesBytes, ssndLen) : ssndLen;
             _dataLength -= _dataLength % _blockAlign; // whole frames only
             _dataStart = ssndStart;
+            Compression = (compression ?? "NONE").Trim();
             }
             catch
             {
