@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 using NAudio.Wave;
 using QuickLook.Common.Plugin;
@@ -239,9 +240,18 @@ namespace QuickLook.Plugin.AudioViewer
             RenderSpectrogram();
         }
 
+        // Translate vertical wheel/trackpad scrolling into horizontal timeline scrolling
+        // (the ScrollViewer only scrolls horizontally, so the wheel does nothing by default).
+        private void ViewScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (ViewScroll.ScrollableWidth <= 0) return; // nothing to scroll; let it bubble
+            ViewScroll.ScrollToHorizontalOffset(ViewScroll.HorizontalOffset - e.Delta);
+            e.Handled = true;
+        }
+
         private void SpectrogramButton_Click(object sender, RoutedEventArgs e)
         {
-            // Overlay layout only: toggle which single view fills the pane.
+            // Single-view layout only: toggle which view fills the pane.
             _showingSpectrogram = !_showingSpectrogram;
             if (_showingSpectrogram) ShowSpectrogramAsync(false);
 
@@ -264,7 +274,7 @@ namespace QuickLook.Plugin.AudioViewer
                 SpectrogramButton.Visibility = Visibility.Collapsed;
                 _showingSpectrogram = true;
             }
-            else // Overlay
+            else // Single view
             {
                 WaveRow.Height = new GridLength(0);
                 SpecRow.Height = new GridLength(1, GridUnitType.Star);

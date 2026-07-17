@@ -55,7 +55,7 @@
             <TextBlock Text="Layout" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
             <ComboBox x:Name="LayoutCombo" Margin="0,0,0,8" SelectionChanged="LayoutCombo_Changed">
               <ComboBoxItem Content="Stacked"/>
-              <ComboBoxItem Content="Overlay (toggle)"/>
+              <ComboBoxItem Content="Single view"/>
             </ComboBox>
 
             <TextBlock Text="Frequency scale" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
@@ -105,11 +105,12 @@
     <!-- View pane. A horizontally-scrollable timeline holds the waveform (top,
          1*) and spectrogram (bottom, 4*) at the same width, so they stay aligned
          in time; long files render in full and scroll instead of truncating.
-         Overlay layout collapses the wave row to 0 and toggles a single view.
+         Single-view layout collapses the wave row to 0 and toggles one view.
          Timeline width is set in code; MinWidth keeps short files filling the pane. -->
     <Grid Grid.Row="1">
       <ScrollViewer x:Name="ViewScroll" HorizontalScrollBarVisibility="Auto"
-                    VerticalScrollBarVisibility="Disabled">
+                    VerticalScrollBarVisibility="Disabled"
+                    PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
         <Grid x:Name="Timeline"
               Height="{Binding ViewportHeight, ElementName=ViewScroll}"
               MinWidth="{Binding ViewportWidth, ElementName=ViewScroll}">

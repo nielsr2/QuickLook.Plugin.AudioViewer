@@ -6,7 +6,7 @@ namespace QuickLook.Plugin.AudioViewer.Settings
         /// <summary>Waveform on top (1/4 height), spectrogram below (3/4+), both visible.</summary>
         Stacked,
         /// <summary>One view at a time; a button toggles waveform ⇄ spectrogram.</summary>
-        Overlay
+        Single
     }
 
     /// <summary>Spectrogram vertical (frequency) axis warping.</summary>
