@@ -5,6 +5,9 @@
     <IsPackable>false</IsPackable>
     <LangVersion>latest</LangVersion>
     <Platforms>AnyCPU;x64</Platforms>
+    <!-- WaveformView derives from WPF's FrameworkElement, so tests that
+         reference it need the WPF framework references. -->
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
