@@ -10,5 +10,10 @@
 
 # IDE
 .vs/
+.vscode/
 .idea/
 *.suo
+
+# Local-only: session memory, design docs
+.remember/
+docs/
