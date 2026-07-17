@@ -1,0 +1,55 @@
+<UserControl x:Class="QuickLook.Plugin.AudioViewer.AudioViewerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:QuickLook.Plugin.AudioViewer.Controls"
+             Background="#FF1E1E1E">
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <!-- Transport bar -->
+    <Grid Grid.Row="0" Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+
+      <Button x:Name="PlayPauseButton" Grid.Column="0" Width="40" Height="28"
+              Content="&#9654;" Click="PlayPauseButton_Click"/>
+      <Slider x:Name="SeekSlider" Grid.Column="1" Margin="8,0" VerticalAlignment="Center"
+              Minimum="0" Maximum="1" SmallChange="0.01" LargeChange="0.05"
+              Thumb.DragStarted="SeekSlider_DragStarted"
+              Thumb.DragCompleted="SeekSlider_DragCompleted"/>
+      <TextBlock x:Name="TimeText" Grid.Column="2" VerticalAlignment="Center"
+                 Foreground="#FFDDDDDD" Margin="4,0" Text="00:00 / 00:00"/>
+      <Slider x:Name="VolumeSlider" Grid.Column="3" Width="80" Margin="8,0"
+              VerticalAlignment="Center" Minimum="0" Maximum="1" Value="0.8"
+              ValueChanged="VolumeSlider_ValueChanged"/>
+      <CheckBox x:Name="AutoPlayCheck" Grid.Column="4" VerticalAlignment="Center"
+                Foreground="#FFDDDDDD" Content="Auto-play"
+                Checked="AutoPlayCheck_Changed" Unchecked="AutoPlayCheck_Changed"/>
+    </Grid>
+
+    <!-- View pane: waveform + optional spectrogram image overlaid, toggled -->
+    <Grid Grid.Row="1">
+      <ctl:WaveformView x:Name="Waveform"/>
+      <Image x:Name="SpectrogramImage" Stretch="Fill" Visibility="Collapsed"/>
+      <Rectangle x:Name="SpectrogramPlayhead" Width="1.5" Fill="#FFFF5252"
+                 HorizontalAlignment="Left" Visibility="Collapsed"/>
+      <TextBlock x:Name="StatusText" Foreground="#FFBBBBBB"
+                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                 Text="Loading…"/>
+    </Grid>
+
+    <!-- Toggle button -->
+    <Button x:Name="SpectrogramButton" Grid.Row="2" HorizontalAlignment="Right"
+            Margin="0,8,0,0" Padding="10,4" Content="Spectrogram ▸"
+            Click="SpectrogramButton_Click"/>
+  </Grid>
+</UserControl>
