@@ -4,13 +4,31 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using NAudio.Dsp;
 using NAudio.Wave;
+using QuickLook.Plugin.AudioViewer.Settings;
 
 namespace QuickLook.Plugin.AudioViewer.Audio
 {
+    /// <summary>Options controlling how linear STFT frames are rendered to a bitmap.</summary>
+    public sealed class SpectrogramRenderOptions
+    {
+        public int SampleRate { get; set; } = 44100;
+        public int FftSize { get; set; } = 1024;
+        public int PixelWidth { get; set; } = 800;
+        public int PixelHeight { get; set; } = 360;
+        public FrequencyScale FrequencyScale { get; set; } = FrequencyScale.Linear;
+        public AmplitudeScale AmplitudeScale { get; set; } = AmplitudeScale.Decibel;
+        public SpectrogramColormap Colormap { get; set; } = SpectrogramColormap.Magma;
+        /// <summary>Contrast floor in dB (negative). In dB mode this is the absolute black level.</summary>
+        public double DbFloor { get; set; } = -90;
+        /// <summary>Top of the axis in Hz; &lt;= 0 means full (Nyquist).</summary>
+        public double MaxFrequencyHz { get; set; } = 0;
+    }
+
     /// <summary>
-    /// Short-time Fourier transform of an audio signal, plus a colormapped
-    /// bitmap renderer. The magnitude core is pure and unit-tested; the
-    /// bitmap render is WPF and verified manually.
+    /// Short-time Fourier transform of an audio signal, plus a colormapped bitmap
+    /// renderer. <see cref="ComputeMagnitudes"/> returns raw <b>linear</b> magnitude
+    /// frames (pure, unit-tested); <see cref="Render"/> does all frequency-axis
+    /// warping, amplitude scaling, and coloring (WPF, verified manually).
     /// </summary>
     public static class SpectrogramGenerator
     {
@@ -91,71 +109,97 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             for (int b = 0; b < bins; b++)
             {
                 double re = complex[b].X, im = complex[b].Y;
-                double m = Math.Sqrt(re * re + im * im);
-                mag[b] = (float)(20.0 * Math.Log10(m + 1e-9)); // dB
+                mag[b] = (float)Math.Sqrt(re * re + im * im); // linear magnitude
             }
             return mag;
         }
 
-        public static WriteableBitmap Render(float[][] magnitudes, int pixelWidth, int pixelHeight,
-            double dbFloor = -90)
+        public static WriteableBitmap Render(float[][] linearFrames, SpectrogramRenderOptions o)
         {
-            if (pixelWidth < 1) pixelWidth = 1;
-            if (pixelHeight < 1) pixelHeight = 1;
+            int pw = Math.Max(1, o.PixelWidth);
+            int ph = Math.Max(1, o.PixelHeight);
+            var bmp = new WriteableBitmap(pw, ph, 96, 96, PixelFormats.Bgra32, null);
+            var pixels = new byte[pw * ph * 4];
 
-            var bmp = new WriteableBitmap(pixelWidth, pixelHeight, 96, 96, PixelFormats.Bgra32, null);
-            int frames = magnitudes.Length;
-            int bins = frames > 0 ? magnitudes[0].Length : 1;
-            var pixels = new byte[pixelWidth * pixelHeight * 4];
+            int frames = linearFrames?.Length ?? 0;
+            int binsAvail = frames > 0 ? linearFrames[0].Length : 0;
+            bool db = o.AmplitudeScale == AmplitudeScale.Decibel;
 
-            // find a stable ceiling for normalization
-            double dbMax = -300;
-            for (int f = 0; f < frames; f++)
-                for (int b = 0; b < bins; b++)
-                    if (magnitudes[f][b] > dbMax) dbMax = magnitudes[f][b];
-            if (dbMax < dbFloor + 1) dbMax = dbFloor + 1;
+            // row 0 = lowest frequency (bottom); each row aggregates a span of FFT bins.
+            var rowBins = FrequencyScaleMapper.BuildRowBins(ph, o.FrequencyScale, o.FftSize, o.SampleRate, o.MaxFrequencyHz);
 
-            for (int x = 0; x < pixelWidth; x++)
+            // Pass 1: peak-hold power per (column frame, row) into the amplitude domain.
+            var vals = new double[pw * ph];
+            double maxVal = double.NegativeInfinity;
+            for (int x = 0; x < pw; x++)
             {
-                int f = frames > 0 ? (int)((long)x * frames / pixelWidth) : 0;
-                for (int y = 0; y < pixelHeight; y++)
+                int f = frames > 0 ? (int)((long)x * frames / pw) : -1;
+                float[] frame = f >= 0 ? linearFrames[f] : null;
+                for (int r = 0; r < ph; r++)
                 {
-                    // y=0 is top → high frequency; low freq at bottom
-                    int b = bins > 0 ? (int)((long)(pixelHeight - 1 - y) * bins / pixelHeight) : 0;
-                    double db = (frames > 0) ? magnitudes[f][b] : dbFloor;
-                    double t = (db - dbFloor) / (dbMax - dbFloor);
-                    if (t < 0) t = 0; if (t > 1) t = 1;
-                    Magma(t, out byte r, out byte g, out byte bl);
+                    double v;
+                    if (frame == null)
+                    {
+                        v = db ? -400.0 : 0.0;
+                    }
+                    else
+                    {
+                        var br = rowBins[r];
+                        int hi = Math.Min(br.Hi, binsAvail - 1);
+                        double peakPow = 0.0;
+                        for (int b = br.Lo; b <= hi; b++)
+                        {
+                            double m = frame[b];
+                            double p = m * m;
+                            if (p > peakPow) peakPow = p;
+                        }
+                        v = db ? 10.0 * Math.Log10(peakPow + 1e-12) : Math.Sqrt(peakPow);
+                    }
+                    vals[x * ph + r] = v;
+                    if (v > maxVal) maxVal = v;
+                }
+            }
+            if (double.IsNegativeInfinity(maxVal)) maxVal = db ? 0.0 : 1.0;
 
-                    int idx = (y * pixelWidth + x) * 4;
-                    pixels[idx + 0] = bl;
-                    pixels[idx + 1] = g;
-                    pixels[idx + 2] = r;
+            // Normalization: dB uses an absolute floor + adaptive ceiling (silence stays
+            // dark, matching the original look); linear is peak-relative with a silence guard.
+            double black, range;
+            if (db)
+            {
+                double ceiling = Math.Max(maxVal, o.DbFloor + 1.0);
+                black = o.DbFloor;
+                range = Math.Max(1.0, ceiling - black);
+            }
+            else if (maxVal < 1e-6)
+            {
+                black = 0.0; range = 1.0; // effectively silent -> all dark
+            }
+            else
+            {
+                black = maxVal * Math.Pow(10.0, o.DbFloor / 20.0);
+                range = Math.Max(1e-12, maxVal - black);
+            }
+
+            // Pass 2: normalize + colorize. y=0 is the top => highest frequency.
+            for (int x = 0; x < pw; x++)
+            {
+                for (int y = 0; y < ph; y++)
+                {
+                    int r = ph - 1 - y;
+                    double t = (vals[x * ph + r] - black) / range;
+                    if (t < 0) t = 0; else if (t > 1) t = 1;
+                    Colormaps.Sample(o.Colormap, t, out byte cr, out byte cg, out byte cb);
+
+                    int idx = (y * pw + x) * 4;
+                    pixels[idx + 0] = cb;
+                    pixels[idx + 1] = cg;
+                    pixels[idx + 2] = cr;
                     pixels[idx + 3] = 255;
                 }
             }
 
-            bmp.WritePixels(new System.Windows.Int32Rect(0, 0, pixelWidth, pixelHeight),
-                pixels, pixelWidth * 4, 0);
+            bmp.WritePixels(new System.Windows.Int32Rect(0, 0, pw, ph), pixels, pw * 4, 0);
             return bmp;
-        }
-
-        // compact magma-ish colormap (t in [0,1])
-        private static void Magma(double t, out byte r, out byte g, out byte b)
-        {
-            double[] stops = { 0.0, 0.25, 0.5, 0.75, 1.0 };
-            byte[][] cols =
-            {
-                new byte[] { 0, 0, 4 }, new byte[] { 81, 18, 124 },
-                new byte[] { 183, 55, 121 }, new byte[] { 252, 137, 97 },
-                new byte[] { 252, 253, 191 }
-            };
-            int i = 0;
-            while (i < stops.Length - 2 && t > stops[i + 1]) i++;
-            double u = (t - stops[i]) / (stops[i + 1] - stops[i]);
-            r = (byte)(cols[i][0] + u * (cols[i + 1][0] - cols[i][0]));
-            g = (byte)(cols[i][1] + u * (cols[i + 1][1] - cols[i][1]));
-            b = (byte)(cols[i][2] + u * (cols[i + 1][2] - cols[i][2]));
         }
     }
 }

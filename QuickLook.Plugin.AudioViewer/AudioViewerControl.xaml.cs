@@ -164,13 +164,27 @@ namespace QuickLook.Plugin.AudioViewer
             System.Windows.Media.Imaging.WriteableBitmap bmp = null;
 
             bool capped = false;
+            int fftSize = PluginSettings.FftSize;
             await Task.Run(() =>
             {
                 using (var stream = AudioReaderFactory.Create(_path))
                 {
+                    int sr = stream.WaveFormat.SampleRate;
                     var mags = SpectrogramGenerator.ComputeMagnitudes(stream.ToSampleProvider(),
-                        fftSize: 1024, hop: 512, maxFrames: 4000, out capped);
-                    bmp = SpectrogramGenerator.Render(mags, w, h);
+                        fftSize, fftSize / 2, 4000, out capped);
+                    var opts = new SpectrogramRenderOptions
+                    {
+                        SampleRate = sr,
+                        FftSize = fftSize,
+                        PixelWidth = w,
+                        PixelHeight = h,
+                        FrequencyScale = PluginSettings.FreqScale,
+                        AmplitudeScale = PluginSettings.AmpScale,
+                        Colormap = PluginSettings.Colormap,
+                        DbFloor = PluginSettings.DbFloor,
+                        MaxFrequencyHz = PluginSettings.MaxFrequencyHz
+                    };
+                    bmp = SpectrogramGenerator.Render(mags, opts);
                     bmp.Freeze();
                 }
             });
