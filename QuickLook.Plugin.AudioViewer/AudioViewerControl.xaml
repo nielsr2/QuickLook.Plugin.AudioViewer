@@ -36,13 +36,20 @@
                 Checked="AutoPlayCheck_Changed" Unchecked="AutoPlayCheck_Changed"/>
     </Grid>
 
-    <!-- View pane: waveform + optional spectrogram image overlaid, toggled -->
+    <!-- View pane. Two sub-rows: waveform (top) and spectrogram (bottom).
+         Stacked layout uses both (1* : 4*); Overlay collapses the wave row to 0
+         and moves the waveform into the spectrogram row to toggle full-area. -->
     <Grid Grid.Row="1">
-      <ctl:WaveformView x:Name="Waveform"/>
-      <Image x:Name="SpectrogramImage" Stretch="Fill" Visibility="Collapsed"/>
-      <Rectangle x:Name="SpectrogramPlayhead" Width="1.5" Fill="#FFFF5252"
+      <Grid.RowDefinitions>
+        <RowDefinition x:Name="WaveRow" Height="1*"/>
+        <RowDefinition x:Name="SpecRow" Height="4*"/>
+      </Grid.RowDefinitions>
+
+      <ctl:WaveformView x:Name="Waveform" Grid.Row="0"/>
+      <Image x:Name="SpectrogramImage" Grid.Row="1" Stretch="Fill" Visibility="Collapsed"/>
+      <Rectangle x:Name="SpectrogramPlayhead" Grid.Row="1" Width="1.5" Fill="#FFFF5252"
                  HorizontalAlignment="Left" Visibility="Collapsed"/>
-      <TextBlock x:Name="StatusText" Foreground="#FFBBBBBB"
+      <TextBlock x:Name="StatusText" Grid.Row="0" Grid.RowSpan="2" Foreground="#FFBBBBBB"
                  HorizontalAlignment="Center" VerticalAlignment="Center"
                  Text="Loading…"/>
     </Grid>

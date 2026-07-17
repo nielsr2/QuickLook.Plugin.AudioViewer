@@ -21,6 +21,13 @@ namespace QuickLook.Plugin.AudioViewer
         private bool _showingSpectrogram;
         private bool _spectrogramBuilt;
 
+        // Cached linear STFT frames so setting changes re-render without re-running
+        // the FFT; only an FFT-size change forces a recompute.
+        private float[][] _spectrogramFrames;
+        private int _spectrogramSampleRate;
+        private int _spectrogramFftSize = -1;
+        private bool _spectrogramCapped;
+
         public AudioViewerControl(string path, ContextObject context)
         {
             InitializeComponent();
@@ -58,6 +65,10 @@ namespace QuickLook.Plugin.AudioViewer
                 _timer.Start();
 
                 if (PluginSettings.AutoPlay) TogglePlay(true);
+
+                ApplyLayout(PluginSettings.Layout);
+                if (PluginSettings.Layout == LayoutMode.Stacked)
+                    ShowSpectrogramAsync(false); // spectrogram is always visible when stacked
             }
             catch (AudioFormatException ex)
             {
@@ -143,63 +154,132 @@ namespace QuickLook.Plugin.AudioViewer
 
         private void SpectrogramButton_Click(object sender, RoutedEventArgs e)
         {
+            // Overlay layout only: toggle which single view fills the pane.
             _showingSpectrogram = !_showingSpectrogram;
-            if (_showingSpectrogram && !_spectrogramBuilt) BuildSpectrogram();
+            if (_showingSpectrogram) ShowSpectrogramAsync(false);
 
             Waveform.Visibility = _showingSpectrogram ? Visibility.Collapsed : Visibility.Visible;
             SpectrogramImage.Visibility = _showingSpectrogram ? Visibility.Visible : Visibility.Collapsed;
-            SpectrogramPlayhead.Visibility = _showingSpectrogram && _spectrogramBuilt
-                ? Visibility.Visible : Visibility.Collapsed;
             SpectrogramButton.Content = _showingSpectrogram ? "◂ Waveform" : "Spectrogram ▸";
+            UpdateSpectrogramPlayheadVisibility();
         }
 
-        private async void BuildSpectrogram()
+        /// <summary>Arrange the waveform/spectrogram panes for the given layout mode.</summary>
+        private void ApplyLayout(LayoutMode mode)
         {
-            SpectrogramButton.IsEnabled = false;
-            StatusText.Text = "Generating spectrogram…";
-            StatusText.Visibility = Visibility.Visible;
+            if (mode == LayoutMode.Stacked)
+            {
+                WaveRow.Height = new GridLength(1, GridUnitType.Star);
+                SpecRow.Height = new GridLength(4, GridUnitType.Star);
+                Grid.SetRow(Waveform, 0);
+                Waveform.Visibility = Visibility.Visible;
+                SpectrogramImage.Visibility = Visibility.Visible;
+                SpectrogramButton.Visibility = Visibility.Collapsed;
+                _showingSpectrogram = true;
+            }
+            else // Overlay
+            {
+                WaveRow.Height = new GridLength(0);
+                SpecRow.Height = new GridLength(1, GridUnitType.Star);
+                Grid.SetRow(Waveform, 1);
+                SpectrogramButton.Visibility = Visibility.Visible;
+                _showingSpectrogram = false;
+                Waveform.Visibility = Visibility.Visible;
+                SpectrogramImage.Visibility = Visibility.Collapsed;
+                SpectrogramButton.Content = "Spectrogram ▸";
+            }
+            UpdateSpectrogramPlayheadVisibility();
+        }
 
-            int w = Math.Max(1, (int)Waveform.ActualWidth);
-            int h = Math.Max(1, (int)Waveform.ActualHeight);
-            System.Windows.Media.Imaging.WriteableBitmap bmp = null;
-
-            bool capped = false;
+        /// <summary>Ensure linear STFT frames are cached (recomputing on FFT-size change), then render.</summary>
+        private async void ShowSpectrogramAsync(bool forceRecompute)
+        {
             int fftSize = PluginSettings.FftSize;
+            bool needCompute = forceRecompute || _spectrogramFrames == null || _spectrogramFftSize != fftSize;
+
+            if (needCompute)
+            {
+                StatusText.Text = "Generating spectrogram…";
+                StatusText.Visibility = Visibility.Visible;
+                SpectrogramButton.IsEnabled = false;
+
+                float[][] frames = null;
+                int sr = 44100;
+                bool capped = false;
+                try
+                {
+                    await Task.Run(() =>
+                    {
+                        using (var stream = AudioReaderFactory.Create(_path))
+                        {
+                            sr = stream.WaveFormat.SampleRate;
+                            frames = SpectrogramGenerator.ComputeMagnitudes(stream.ToSampleProvider(),
+                                fftSize, fftSize / 2, 4000, out capped);
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = "Could not build spectrogram. " + ex.Message;
+                    StatusText.Visibility = Visibility.Visible;
+                    SpectrogramButton.IsEnabled = true;
+                    return;
+                }
+
+                _spectrogramFrames = frames;
+                _spectrogramSampleRate = sr;
+                _spectrogramFftSize = fftSize;
+                _spectrogramCapped = capped;
+                SpectrogramButton.IsEnabled = true;
+            }
+
+            RenderSpectrogram();
+        }
+
+        /// <summary>Colorize the cached frames with the current display settings (no FFT).</summary>
+        private async void RenderSpectrogram()
+        {
+            var frames = _spectrogramFrames;
+            if (frames == null) return;
+
+            var opts = new SpectrogramRenderOptions
+            {
+                SampleRate = _spectrogramSampleRate,
+                FftSize = _spectrogramFftSize,
+                PixelWidth = Math.Min(2000, Math.Max(600, frames.Length)),
+                PixelHeight = 512,
+                FrequencyScale = PluginSettings.FreqScale,
+                AmplitudeScale = PluginSettings.AmpScale,
+                Colormap = PluginSettings.Colormap,
+                DbFloor = PluginSettings.DbFloor,
+                MaxFrequencyHz = PluginSettings.MaxFrequencyHz
+            };
+
+            System.Windows.Media.Imaging.WriteableBitmap bmp = null;
             await Task.Run(() =>
             {
-                using (var stream = AudioReaderFactory.Create(_path))
-                {
-                    int sr = stream.WaveFormat.SampleRate;
-                    var mags = SpectrogramGenerator.ComputeMagnitudes(stream.ToSampleProvider(),
-                        fftSize, fftSize / 2, 4000, out capped);
-                    var opts = new SpectrogramRenderOptions
-                    {
-                        SampleRate = sr,
-                        FftSize = fftSize,
-                        PixelWidth = w,
-                        PixelHeight = h,
-                        FrequencyScale = PluginSettings.FreqScale,
-                        AmplitudeScale = PluginSettings.AmpScale,
-                        Colormap = PluginSettings.Colormap,
-                        DbFloor = PluginSettings.DbFloor,
-                        MaxFrequencyHz = PluginSettings.MaxFrequencyHz
-                    };
-                    bmp = SpectrogramGenerator.Render(mags, opts);
-                    bmp.Freeze();
-                }
+                bmp = SpectrogramGenerator.Render(frames, opts);
+                bmp.Freeze();
             });
 
             SpectrogramImage.Source = bmp;
             _spectrogramBuilt = true;
-            StatusText.Visibility = capped ? Visibility.Visible : Visibility.Collapsed;
-            if (capped) StatusText.Text = "Spectrogram (time-truncated for length)";
-            SpectrogramButton.IsEnabled = true;
+            StatusText.Visibility = _spectrogramCapped ? Visibility.Visible : Visibility.Collapsed;
+            if (_spectrogramCapped) StatusText.Text = "Spectrogram (time-truncated for length)";
+            UpdateSpectrogramPlayheadVisibility();
         }
 
         private void UpdateSpectrogramPlayhead(double frac)
         {
-            if (!_showingSpectrogram || !_spectrogramBuilt) return;
+            if (SpectrogramImage.Visibility != Visibility.Visible || !_spectrogramBuilt) return;
             SpectrogramPlayhead.Margin = new Thickness(frac * SpectrogramImage.ActualWidth, 0, 0, 0);
+        }
+
+        private void UpdateSpectrogramPlayheadVisibility()
+        {
+            SpectrogramPlayhead.Visibility =
+                (SpectrogramImage.Visibility == Visibility.Visible && _spectrogramBuilt)
+                    ? Visibility.Visible : Visibility.Collapsed;
         }
 
         public void Unload()
