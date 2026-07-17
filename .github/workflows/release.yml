@@ -1,0 +1,38 @@
+name: Release
+
+# Push a version tag (e.g. `v1.3` or `v1.3.1`) to build and publish a Release
+# with the .qlplugin attached:
+#   git tag v1.3.1 && git push origin v1.3.1
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # required for softprops/action-gh-release to create the release
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (with submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build (Release)
+        run: dotnet build QuickLook.Plugin.AudioViewer/QuickLook.Plugin.AudioViewer.csproj -c Release
+
+      - name: Package .qlplugin
+        run: powershell -File Scripts/pack-zip.ps1
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: QuickLook.Plugin.AudioViewer.qlplugin
+          generate_release_notes: true

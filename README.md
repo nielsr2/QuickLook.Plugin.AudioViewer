@@ -1,5 +1,7 @@
 # QuickLook.Plugin.AudioViewer
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A [QuickLook](https://github.com/QL-Win/QuickLook) plugin that previews audio
 files (`.wav .mp3 .flac .ogg .oga .m4a .aac .wma .aif .aiff`) with a waveform,
 a moving playhead, playback transport (play/pause, seek, volume, persisted
@@ -9,8 +11,8 @@ auto-play), and a configurable spectrogram.
 
 A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
 
-- **Layout** — *Stacked* (waveform above spectrogram, the default) or *Overlay*
-  (a button toggles between the two full-area views).
+- **Layout** — *Stacked* (waveform above spectrogram, the default) or *Single view*
+  (a button toggles between the full-area waveform and spectrogram).
 - **Frequency scale** — Linear, Log, or Mel.
 - **Amplitude** — Decibel (dB) or Linear.
 - **Colormap** — Magma, Viridis, or Grayscale.
@@ -53,5 +55,22 @@ dotnet test tests/QuickLook.Plugin.AudioViewer.Tests
 
 ## Requirements
 
-- Windows 10 1709+ / Windows 11 (Media Foundation codecs for FLAC/AAC/M4A/WMA).
-- QuickLook (.NET Framework 4.x runtime).
+- Windows with **.NET Framework 4.8** (built in on Windows 10 1903+ / Windows 11;
+  installable on older Windows). Media Foundation codecs are used for FLAC/AAC/M4A/WMA.
+- QuickLook.
+
+## Releases
+
+Pushing a version tag (e.g. `git tag v1.3 && git push origin v1.3`) runs the
+release workflow, which builds, packages the `.qlplugin`, and attaches it to a
+GitHub Release. CI builds and runs the tests on every push/PR.
+
+## License
+
+[MIT](LICENSE) © nielsr2.
+
+## Acknowledgements
+
+- [QuickLook](https://github.com/QL-Win/QuickLook) and QuickLook.Common — GPL-3.0.
+- [NAudio](https://github.com/naudio/NAudio) and
+  [NAudio.Vorbis](https://github.com/naudio/Vorbis) — MIT.

@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: windows-latest   # WPF + .NET Framework + PowerShell packaging need Windows
+    steps:
+      - name: Checkout (with submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive   # QuickLook.Common is a submodule
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore QuickLook.Plugin.AudioViewer.sln
+
+      - name: Build (Release)
+        run: dotnet build QuickLook.Plugin.AudioViewer.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test QuickLook.Plugin.AudioViewer.sln -c Release --no-build --verbosity normal
