@@ -28,13 +28,33 @@ namespace QuickLook.Plugin.AudioViewer
         private int _spectrogramFftSize = -1;
         private bool _spectrogramCapped;
 
+        private bool _initializingSettings;
+        private int _renderGeneration;
+
+        private static readonly int[] FftSizes = { 512, 1024, 2048, 4096 };
+        private static readonly int[] MaxFreqs = { 0, 20000, 10000, 5000 };
+
         public AudioViewerControl(string path, ContextObject context)
         {
             InitializeComponent();
             _path = path;
             _context = context;
             AutoPlayCheck.IsChecked = PluginSettings.AutoPlay;
+            InitSettingsControls();
             Loaded += OnLoaded;
+        }
+
+        private void InitSettingsControls()
+        {
+            _initializingSettings = true;
+            LayoutCombo.SelectedIndex = (int)PluginSettings.Layout;
+            FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
+            AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
+            ColorCombo.SelectedIndex = (int)PluginSettings.Colormap;
+            FftCombo.SelectedIndex = Math.Max(0, Array.IndexOf(FftSizes, PluginSettings.FftSize));
+            MaxFreqCombo.SelectedIndex = Math.Max(0, Array.IndexOf(MaxFreqs, PluginSettings.MaxFrequencyHz));
+            ContrastSlider.Value = PluginSettings.DbFloor;
+            _initializingSettings = false;
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -152,6 +172,57 @@ namespace QuickLook.Plugin.AudioViewer
             PluginSettings.AutoPlay = AutoPlayCheck.IsChecked == true;
         }
 
+        private void LayoutCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || LayoutCombo.SelectedIndex < 0) return;
+            var mode = (LayoutMode)LayoutCombo.SelectedIndex;
+            PluginSettings.Layout = mode;
+            ApplyLayout(mode);
+            if (mode == LayoutMode.Stacked) ShowSpectrogramAsync(false);
+        }
+
+        private void FreqCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || FreqCombo.SelectedIndex < 0) return;
+            PluginSettings.FreqScale = (FrequencyScale)FreqCombo.SelectedIndex;
+            RenderSpectrogram();
+        }
+
+        private void AmpCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || AmpCombo.SelectedIndex < 0) return;
+            PluginSettings.AmpScale = (AmplitudeScale)AmpCombo.SelectedIndex;
+            RenderSpectrogram();
+        }
+
+        private void ColorCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || ColorCombo.SelectedIndex < 0) return;
+            PluginSettings.Colormap = (SpectrogramColormap)ColorCombo.SelectedIndex;
+            RenderSpectrogram();
+        }
+
+        private void FftCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || FftCombo.SelectedIndex < 0) return;
+            PluginSettings.FftSize = FftSizes[FftCombo.SelectedIndex];
+            ShowSpectrogramAsync(true); // FFT size change requires a recompute
+        }
+
+        private void MaxFreqCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || MaxFreqCombo.SelectedIndex < 0) return;
+            PluginSettings.MaxFrequencyHz = MaxFreqs[MaxFreqCombo.SelectedIndex];
+            RenderSpectrogram();
+        }
+
+        private void ContrastSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.DbFloor = (int)Math.Round(e.NewValue);
+            RenderSpectrogram();
+        }
+
         private void SpectrogramButton_Click(object sender, RoutedEventArgs e)
         {
             // Overlay layout only: toggle which single view fills the pane.
@@ -242,6 +313,7 @@ namespace QuickLook.Plugin.AudioViewer
             var frames = _spectrogramFrames;
             if (frames == null) return;
 
+            int gen = ++_renderGeneration;
             var opts = new SpectrogramRenderOptions
             {
                 SampleRate = _spectrogramSampleRate,
@@ -261,6 +333,8 @@ namespace QuickLook.Plugin.AudioViewer
                 bmp = SpectrogramGenerator.Render(frames, opts);
                 bmp.Freeze();
             });
+
+            if (gen != _renderGeneration) return; // a newer render superseded this one
 
             SpectrogramImage.Source = bmp;
             _spectrogramBuilt = true;
