@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
-using System.Windows.Controls;
 using QuickLook.Common.Plugin;
 
 namespace QuickLook.Plugin.AudioViewer
@@ -13,6 +12,8 @@ namespace QuickLook.Plugin.AudioViewer
         {
             ".wav", ".mp3", ".flac", ".ogg", ".oga", ".m4a", ".aac", ".wma", ".aif", ".aiff"
         };
+
+        private AudioViewerControl _control;
 
         public int Priority => 0;
 
@@ -37,17 +38,15 @@ namespace QuickLook.Plugin.AudioViewer
         public void View(string path, ContextObject context)
         {
             context.Title = Path.GetFileName(path);
-            context.ViewerContent = new TextBlock
-            {
-                Text = "Audio viewer (stub)",
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            context.IsBusy = false;
+            _control = new AudioViewerControl(path, context);   // self-loads async
+            context.ViewerContent = _control;
+            context.IsBusy = false;                             // control shows its own "Loading…"
         }
 
         public void Cleanup()
         {
+            _control?.Unload();
+            _control = null;
         }
     }
 }
