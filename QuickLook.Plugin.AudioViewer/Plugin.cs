@@ -32,7 +32,7 @@ namespace QuickLook.Plugin.AudioViewer
 
         public void Prepare(string path, ContextObject context)
         {
-            context.PreferredSize = new Size(800, 480);
+            context.PreferredSize = new Size(880, 600); // taller so the stacked spectrogram has room
         }
 
         public void View(string path, ContextObject context)

@@ -3,7 +3,23 @@
 A [QuickLook](https://github.com/QL-Win/QuickLook) plugin that previews audio
 files (`.wav .mp3 .flac .ogg .oga .m4a .aac .wma .aif .aiff`) with a waveform,
 a moving playhead, playback transport (play/pause, seek, volume, persisted
-auto-play), and an on-demand spectrogram.
+auto-play), and a configurable spectrogram.
+
+## Spectrogram
+
+A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
+
+- **Layout** — *Stacked* (waveform above spectrogram, the default) or *Overlay*
+  (a button toggles between the two full-area views).
+- **Frequency scale** — Linear, Log, or Mel.
+- **Amplitude** — Decibel (dB) or Linear.
+- **Colormap** — Magma, Viridis, or Grayscale.
+- **FFT size** — 512 / 1024 / 2048 / 4096 (time-vs-frequency resolution).
+- **Max frequency** — Full / 20 kHz / 10 kHz / 5 kHz.
+- **Contrast** — dB-floor slider.
+
+Display changes re-render instantly from cached FFT data; only an FFT-size change
+recomputes the transform.
 
 ## Build
 
