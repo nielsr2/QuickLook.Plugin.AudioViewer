@@ -26,13 +26,27 @@ namespace QuickLook.Plugin.AudioViewer
         private float[][] _spectrogramFrames;
         private int _spectrogramSampleRate;
         private int _spectrogramFftSize = -1;
-        private bool _spectrogramCapped;
 
         private bool _initializingSettings;
         private int _renderGeneration;
 
         private static readonly int[] FftSizes = { 512, 1024, 2048, 4096 };
         private static readonly int[] MaxFreqs = { 0, 20000, 10000, 5000 };
+
+        // Timeline sizing: the whole file is rendered at ~PxPerSec, bounded by
+        // MaxColumns (caps bitmap width/memory and STFT frame count). Short files
+        // fill the pane (MinWidth binding); long files scroll horizontally.
+        private const double TimelinePxPerSec = 80;
+        private const int MinTimelineColumns = 800;
+        private const int MaxTimelineColumns = 12000;
+
+        private static int TimelineColumns(double seconds)
+        {
+            int cols = (int)(seconds * TimelinePxPerSec);
+            if (cols < MinTimelineColumns) cols = MinTimelineColumns;
+            if (cols > MaxTimelineColumns) cols = MaxTimelineColumns;
+            return cols;
+        }
 
         public AudioViewerControl(string path, ContextObject context)
         {
@@ -69,7 +83,7 @@ namespace QuickLook.Plugin.AudioViewer
                 {
                     playbackStream = AudioReaderFactory.Create(_path);
                     using (var scan = AudioReaderFactory.Create(_path))
-                        waveform = WaveformData.Compute(scan);
+                        waveform = WaveformData.Compute(scan, TimelineColumns(scan.TotalTime.TotalSeconds));
                 });
 
                 _player = new AudioPlayer(playbackStream);
@@ -77,6 +91,7 @@ namespace QuickLook.Plugin.AudioViewer
                 _player.Volume = (float)VolumeSlider.Value;
 
                 Waveform.Waveform = waveform;
+                SetTimelineWidth(_player.Duration.TotalSeconds);
                 StatusText.Visibility = Visibility.Collapsed;
                 UpdateTimeText();
 
@@ -159,6 +174,7 @@ namespace QuickLook.Plugin.AudioViewer
             _player.Seek(TimeSpan.FromSeconds(fraction * _player.Duration.TotalSeconds));
             Waveform.PlayheadFraction = fraction;
             UpdateSpectrogramPlayhead(fraction);
+            ScrollPlayheadIntoView(fraction);
             UpdateTimeText();
         }
 
@@ -284,8 +300,16 @@ namespace QuickLook.Plugin.AudioViewer
                         using (var stream = AudioReaderFactory.Create(_path))
                         {
                             sr = stream.WaveFormat.SampleRate;
+                            // Choose a hop that spreads ~TimelineColumns frames across the
+                            // whole file (bounded), so long files render fully instead of
+                            // truncating — the wider result scrolls horizontally.
+                            int targetCols = TimelineColumns(stream.TotalTime.TotalSeconds);
+                            long audioFrames = stream.BlockAlign > 0 ? stream.Length / stream.BlockAlign : 0;
+                            int hop = audioFrames > 0
+                                ? Math.Max(fftSize / 4, (int)(audioFrames / Math.Max(1, targetCols)))
+                                : fftSize / 2;
                             frames = SpectrogramGenerator.ComputeMagnitudes(stream.ToSampleProvider(),
-                                fftSize, fftSize / 2, 4000, out capped);
+                                fftSize, hop, MaxTimelineColumns + 16, out capped);
                         }
                     });
                 }
@@ -300,7 +324,6 @@ namespace QuickLook.Plugin.AudioViewer
                 _spectrogramFrames = frames;
                 _spectrogramSampleRate = sr;
                 _spectrogramFftSize = fftSize;
-                _spectrogramCapped = capped;
                 SpectrogramButton.IsEnabled = true;
             }
 
@@ -318,7 +341,7 @@ namespace QuickLook.Plugin.AudioViewer
             {
                 SampleRate = _spectrogramSampleRate,
                 FftSize = _spectrogramFftSize,
-                PixelWidth = Math.Min(2000, Math.Max(600, frames.Length)),
+                PixelWidth = Math.Max(1, Math.Min(MaxTimelineColumns, frames.Length)),
                 PixelHeight = 512,
                 FrequencyScale = PluginSettings.FreqScale,
                 AmplitudeScale = PluginSettings.AmpScale,
@@ -338,15 +361,39 @@ namespace QuickLook.Plugin.AudioViewer
 
             SpectrogramImage.Source = bmp;
             _spectrogramBuilt = true;
-            StatusText.Visibility = _spectrogramCapped ? Visibility.Visible : Visibility.Collapsed;
-            if (_spectrogramCapped) StatusText.Text = "Spectrogram (time-truncated for length)";
+            StatusText.Visibility = Visibility.Collapsed; // whole file is rendered; no truncation note
             UpdateSpectrogramPlayheadVisibility();
+        }
+
+        /// <summary>Set the scrollable timeline width from the file duration.</summary>
+        private void SetTimelineWidth(double seconds)
+        {
+            double w = seconds * TimelinePxPerSec;
+            if (w > MaxTimelineColumns) w = MaxTimelineColumns;
+            if (w < 1) w = 1;
+            Timeline.Width = w; // MinWidth binding keeps short files filling the pane
         }
 
         private void UpdateSpectrogramPlayhead(double frac)
         {
             if (SpectrogramImage.Visibility != Visibility.Visible || !_spectrogramBuilt) return;
-            SpectrogramPlayhead.Margin = new Thickness(frac * SpectrogramImage.ActualWidth, 0, 0, 0);
+            double x = frac * Timeline.ActualWidth;
+            SpectrogramPlayhead.Margin = new Thickness(x, 0, 0, 0);
+
+            // During playback, keep the playhead in view as it nears a scrolled edge.
+            if (_player != null && _player.IsPlaying && !_scrubbing)
+            {
+                double off = ViewScroll.HorizontalOffset, vw = ViewScroll.ViewportWidth;
+                if (vw > 0 && Timeline.ActualWidth > vw && (x < off + 40 || x > off + vw - 40))
+                    ViewScroll.ScrollToHorizontalOffset(Math.Max(0, x - vw / 2));
+            }
+        }
+
+        private void ScrollPlayheadIntoView(double frac)
+        {
+            double vw = ViewScroll.ViewportWidth;
+            if (vw <= 0 || Timeline.ActualWidth <= vw) return;
+            ViewScroll.ScrollToHorizontalOffset(Math.Max(0, frac * Timeline.ActualWidth - vw / 2));
         }
 
         private void UpdateSpectrogramPlayheadVisibility()

@@ -21,6 +21,10 @@ A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
 Display changes re-render instantly from cached FFT data; only an FFT-size change
 recomputes the transform.
 
+Long files render in full: the waveform and spectrogram share one horizontally
+scrollable timeline (they stay aligned in time), and the view auto-follows the
+playhead during playback. Short files fill the pane with no scrollbar.
+
 ## Build
 
 ```

@@ -102,20 +102,29 @@
       </Popup>
     </Grid>
 
-    <!-- View pane. Two sub-rows: waveform (top) and spectrogram (bottom).
-         Stacked layout uses both (1* : 4*); Overlay collapses the wave row to 0
-         and moves the waveform into the spectrogram row to toggle full-area. -->
+    <!-- View pane. A horizontally-scrollable timeline holds the waveform (top,
+         1*) and spectrogram (bottom, 4*) at the same width, so they stay aligned
+         in time; long files render in full and scroll instead of truncating.
+         Overlay layout collapses the wave row to 0 and toggles a single view.
+         Timeline width is set in code; MinWidth keeps short files filling the pane. -->
     <Grid Grid.Row="1">
-      <Grid.RowDefinitions>
-        <RowDefinition x:Name="WaveRow" Height="1*"/>
-        <RowDefinition x:Name="SpecRow" Height="4*"/>
-      </Grid.RowDefinitions>
+      <ScrollViewer x:Name="ViewScroll" HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Disabled">
+        <Grid x:Name="Timeline"
+              Height="{Binding ViewportHeight, ElementName=ViewScroll}"
+              MinWidth="{Binding ViewportWidth, ElementName=ViewScroll}">
+          <Grid.RowDefinitions>
+            <RowDefinition x:Name="WaveRow" Height="1*"/>
+            <RowDefinition x:Name="SpecRow" Height="4*"/>
+          </Grid.RowDefinitions>
 
-      <ctl:WaveformView x:Name="Waveform" Grid.Row="0"/>
-      <Image x:Name="SpectrogramImage" Grid.Row="1" Stretch="Fill" Visibility="Collapsed"/>
-      <Rectangle x:Name="SpectrogramPlayhead" Grid.Row="1" Width="1.5" Fill="#FFFF5252"
-                 HorizontalAlignment="Left" Visibility="Collapsed"/>
-      <TextBlock x:Name="StatusText" Grid.Row="0" Grid.RowSpan="2" Foreground="#FFBBBBBB"
+          <ctl:WaveformView x:Name="Waveform" Grid.Row="0"/>
+          <Image x:Name="SpectrogramImage" Grid.Row="1" Stretch="Fill" Visibility="Collapsed"/>
+          <Rectangle x:Name="SpectrogramPlayhead" Grid.Row="0" Grid.RowSpan="2" Width="1.5"
+                     Fill="#FFFF5252" HorizontalAlignment="Left" Visibility="Collapsed"/>
+        </Grid>
+      </ScrollViewer>
+      <TextBlock x:Name="StatusText" Foreground="#FFBBBBBB"
                  HorizontalAlignment="Center" VerticalAlignment="Center"
                  Text="Loading…"/>
     </Grid>
