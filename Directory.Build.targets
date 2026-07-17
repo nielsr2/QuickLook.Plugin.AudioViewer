@@ -1,0 +1,15 @@
+<Project>
+  <!--
+    The QuickLook.Common submodule (upstream) defines a PreBuildEvent that runs
+    Scripts/update-version.ps1 — a script that only exists in the full QuickLook
+    solution, not when QuickLook.Common is consumed standalone as a submodule
+    ProjectReference. Neutralize it here so the submodule builds in this repo.
+
+    Directory.Build.targets is imported after each project body, so this empty
+    assignment overrides the submodule's PreBuildEvent. Our own projects define
+    no PreBuildEvent, so this is a no-op for them.
+  -->
+  <PropertyGroup>
+    <PreBuildEvent></PreBuildEvent>
+  </PropertyGroup>
+</Project>
