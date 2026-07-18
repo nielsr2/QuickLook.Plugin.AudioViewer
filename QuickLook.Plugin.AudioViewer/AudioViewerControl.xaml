@@ -110,7 +110,7 @@
          in time; long files render in full and scroll instead of truncating.
          Single-view layout collapses the wave row to 0 and toggles one view.
          Timeline width is set in code; MinWidth keeps short files filling the pane. -->
-    <Grid Grid.Row="1">
+    <Grid Grid.Row="1" x:Name="ViewPaneGrid">
       <ScrollViewer x:Name="ViewScroll" HorizontalScrollBarVisibility="Auto"
                     VerticalScrollBarVisibility="Disabled"
                     PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
@@ -132,14 +132,32 @@
                  HorizontalAlignment="Center" VerticalAlignment="Center"
                  Text="Loading…"/>
 
-      <!-- File-info overlay (toggled from settings). Click-through so it never
-           blocks scrolling/clicks on the timeline beneath it. -->
-      <Border x:Name="FileInfoPanel" HorizontalAlignment="Left" VerticalAlignment="Top"
-              Margin="8" Padding="9,7" CornerRadius="3" Background="#CC000000"
-              BorderBrush="#40FFFFFF" BorderThickness="1"
-              Visibility="Collapsed" IsHitTestVisible="False">
-        <TextBlock x:Name="FileInfoText" Foreground="#FFEDEDED"
-                   FontFamily="Consolas, Courier New" FontSize="11"/>
+      <!-- File-info overlay (toggled from settings). Bottom-right by default;
+           draggable anywhere in the pane; a ✕ closes it. Wheel events are
+           forwarded so the timeline still scrolls when the pointer is over it. -->
+      <Border x:Name="FileInfoPanel" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+              Margin="0,0,10,10" Padding="9,6,9,7" CornerRadius="3" Background="#CC000000"
+              BorderBrush="#40FFFFFF" BorderThickness="1" Visibility="Collapsed"
+              Cursor="SizeAll"
+              MouseLeftButtonDown="FileInfoPanel_MouseLeftButtonDown"
+              MouseMove="FileInfoPanel_MouseMove"
+              MouseLeftButtonUp="FileInfoPanel_MouseLeftButtonUp"
+              PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
+        <Border.RenderTransform>
+          <TranslateTransform x:Name="FileInfoTranslate"/>
+        </Border.RenderTransform>
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <TextBlock x:Name="FileInfoClose" Grid.Row="0" Text="&#xE8BB;"
+                     FontFamily="Segoe MDL2 Assets" FontSize="10" HorizontalAlignment="Right"
+                     Foreground="#FFCCCCCC" Cursor="Hand" Margin="0,0,0,3" ToolTip="Close"
+                     MouseLeftButtonDown="FileInfoClose_Click"/>
+          <TextBlock x:Name="FileInfoText" Grid.Row="1" Foreground="#FFEDEDED"
+                     FontFamily="Consolas, Courier New" FontSize="11"/>
+        </Grid>
       </Border>
     </Grid>
 

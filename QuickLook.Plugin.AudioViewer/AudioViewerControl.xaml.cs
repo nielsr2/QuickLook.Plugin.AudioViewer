@@ -33,6 +33,10 @@ namespace QuickLook.Plugin.AudioViewer
         private bool _initializingSettings;
         private int _renderGeneration;
 
+        private bool _infoDragging;
+        private Point _infoDragStart;
+        private double _infoStartX, _infoStartY;
+
         private static readonly int[] FftSizes = { 512, 1024, 2048, 4096 };
         private static readonly int[] MaxFreqs = { 0, 20000, 10000, 5000 };
 
@@ -201,6 +205,41 @@ namespace QuickLook.Plugin.AudioViewer
             if (_initializingSettings) return;
             PluginSettings.ShowFileInfo = FileInfoCheck.IsChecked == true;
             FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void FileInfoClose_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;                // don't also start a drag
+            FileInfoCheck.IsChecked = false; // hides the panel and persists ShowFileInfo=false
+        }
+
+        private void FileInfoPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _infoDragging = true;
+            _infoDragStart = e.GetPosition(ViewPaneGrid);
+            _infoStartX = FileInfoTranslate.X;
+            _infoStartY = FileInfoTranslate.Y;
+            FileInfoPanel.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void FileInfoPanel_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_infoDragging) return;
+            var p = e.GetPosition(ViewPaneGrid);
+            double nx = _infoStartX + (p.X - _infoDragStart.X);
+            double ny = _infoStartY + (p.Y - _infoDragStart.Y);
+            // Base anchor is bottom-right; clamp so the panel stays inside the pane.
+            double minX = -Math.Max(0, ViewPaneGrid.ActualWidth - FileInfoPanel.ActualWidth - 12);
+            double minY = -Math.Max(0, ViewPaneGrid.ActualHeight - FileInfoPanel.ActualHeight - 12);
+            FileInfoTranslate.X = Math.Min(0, Math.Max(minX, nx));
+            FileInfoTranslate.Y = Math.Min(0, Math.Max(minY, ny));
+        }
+
+        private void FileInfoPanel_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            _infoDragging = false;
+            FileInfoPanel.ReleaseMouseCapture();
         }
 
         private void LayoutCombo_Changed(object sender, SelectionChangedEventArgs e)
