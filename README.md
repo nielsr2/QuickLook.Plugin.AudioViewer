@@ -7,6 +7,8 @@ files (`.wav .mp3 .flac .ogg .oga .m4a .aac .wma .aif .aiff`) with a waveform,
 a moving playhead, playback transport (play/pause, seek, volume, persisted
 auto-play), and a configurable spectrogram.
 
+![QuickLook.Plugin.AudioViewer previewing a WAV file — waveform above a magma spectrogram, with the draggable file-info overlay](assets/screenshot.png)
+
 ## Spectrogram
 
 A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
