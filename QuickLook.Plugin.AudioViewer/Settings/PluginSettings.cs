@@ -20,6 +20,19 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("ShowFileInfo", value, Domain);
         }
 
+        /// <summary>Remembered file-info overlay offset (px) from its bottom-right anchor.</summary>
+        public static int InfoPosX
+        {
+            get => SettingHelper.Get("InfoPosX", 0, Domain);
+            set => SettingHelper.Set("InfoPosX", value, Domain);
+        }
+
+        public static int InfoPosY
+        {
+            get => SettingHelper.Get("InfoPosY", 0, Domain);
+            set => SettingHelper.Set("InfoPosY", value, Domain);
+        }
+
         // Enum settings are stored as their string name: SettingHelper round-trips
         // primitives via Convert.ChangeType, which cannot parse enum names (it would
         // silently fall back to the default). Enum.TryParse on the stored name restores

@@ -103,6 +103,8 @@ namespace QuickLook.Plugin.AudioViewer
                 Waveform.Waveform = waveform;
                 SetTimelineWidth(_player.Duration.TotalSeconds);
                 FileInfoText.Text = infoText;
+                FileInfoTranslate.X = PluginSettings.InfoPosX; // restore last dragged position
+                FileInfoTranslate.Y = PluginSettings.InfoPosY;
                 FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
                 StatusText.Visibility = Visibility.Collapsed;
                 UpdateTimeText();
@@ -209,8 +211,10 @@ namespace QuickLook.Plugin.AudioViewer
 
         private void FileInfoClose_Click(object sender, MouseButtonEventArgs e)
         {
-            e.Handled = true;                // don't also start a drag
-            FileInfoCheck.IsChecked = false; // hides the panel and persists ShowFileInfo=false
+            e.Handled = true; // don't also start a drag
+            // Dismiss for this file only — leave the "Show file info" setting on, so a
+            // new file shows it again (unless the user unticks it in settings).
+            FileInfoPanel.Visibility = Visibility.Collapsed;
         }
 
         private void FileInfoPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -238,8 +242,11 @@ namespace QuickLook.Plugin.AudioViewer
 
         private void FileInfoPanel_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
+            if (!_infoDragging) return;
             _infoDragging = false;
             FileInfoPanel.ReleaseMouseCapture();
+            PluginSettings.InfoPosX = (int)Math.Round(FileInfoTranslate.X);
+            PluginSettings.InfoPosY = (int)Math.Round(FileInfoTranslate.Y);
         }
 
         private void LayoutCombo_Changed(object sender, SelectionChangedEventArgs e)
