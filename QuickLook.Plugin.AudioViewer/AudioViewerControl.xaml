@@ -18,6 +18,31 @@
     <SolidColorBrush x:Key="OverlayText" Color="#FFEDEDED"/>
     <SolidColorBrush x:Key="OverlayClose" Color="#FFCCCCCC"/>
     <SolidColorBrush x:Key="Playhead" Color="#FFFF5252"/>
+
+    <!-- Chrome-free glyph button used by the note-layer toolbar (icon only, subtle hover). -->
+    <Style x:Key="NoteToolBtn" TargetType="Button">
+      <Setter Property="Width" Value="27"/>
+      <Setter Property="Height" Value="24"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="{DynamicResource OverlayText}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="4,2">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="#33888888"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.4"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </UserControl.Resources>
   <!-- IsSharedSizeScope lets the seek bar and the horizontal scrollbar share the
        spectrogram's left/right gutter widths (frequency ruler and colorbar), so they
@@ -92,6 +117,10 @@
               <ComboBoxItem Content="MIDI note"/>
               <ComboBoxItem Content="Frequency"/>
             </ComboBox>
+
+            <CheckBox x:Name="NoteLayerCheck" Content="Note layer" Foreground="{DynamicResource PrimaryText}"
+                      Margin="0,0,0,10" Checked="NoteLayerCheck_Changed" Unchecked="NoteLayerCheck_Changed"
+                      ToolTip="Draw, edit and export MIDI notes over the spectrogram"/>
 
             <TextBlock Text="Layout" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
             <ComboBox x:Name="LayoutCombo" Margin="0,0,0,8" SelectionChanged="LayoutCombo_Changed">
@@ -210,8 +239,13 @@
             <Image x:Name="SpectrogramImage" Grid.Row="1" Stretch="Fill" Visibility="Collapsed"
                    RenderOptions.BitmapScalingMode="HighQuality"
                    MouseMove="SpectrogramImage_MouseMove" MouseLeave="SpectrogramImage_MouseLeave"/>
+            <!-- Note overlay: same cell as the spectrogram image so it scrolls with it and shares
+                 its coordinate space. Hit-testing is gated by draw mode in code (view mode = off,
+                 so the hover readout above still works). Kept above the image, below the playhead. -->
+            <ctl:NoteOverlay x:Name="Notes" Grid.Row="1" Visibility="Collapsed"/>
             <Rectangle x:Name="SpectrogramPlayhead" Grid.Row="0" Grid.RowSpan="2" Width="1.5"
-                       Fill="{DynamicResource Playhead}" HorizontalAlignment="Left" Visibility="Collapsed"/>
+                       Fill="{DynamicResource Playhead}" HorizontalAlignment="Left" Visibility="Collapsed"
+                       IsHitTestVisible="False"/>
           </Grid>
         </ScrollViewer>
         <TextBlock x:Name="StatusText" Foreground="{DynamicResource SecondaryText}"
@@ -279,6 +313,62 @@
                        Foreground="{DynamicResource OverlayText}" VerticalAlignment="Center"/>
             <TextBlock Text="info" Foreground="{DynamicResource OverlayText}"
                        FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Border>
+
+        <!-- Note-layer toolbar: a small pill in the top-left, shown only when the note layer is
+             on. The pencil toggles draw mode; the two icons export the notes (Save as MIDI…,
+             Copy notes as text). Sits outside the scroll so it stays put as the timeline scrolls. -->
+        <Border x:Name="NoteToolbar" HorizontalAlignment="Left" VerticalAlignment="Top"
+                Margin="10,10,0,0" Padding="3" CornerRadius="10" Background="{DynamicResource OverlayBackground}"
+                BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed">
+          <StackPanel Orientation="Horizontal">
+            <ToggleButton x:Name="DrawToggle" Width="27" Height="24" Padding="0" Cursor="Hand"
+                          ToolTip="Draw notes (pencil)" Click="DrawToggle_Click"
+                          Foreground="{DynamicResource OverlayText}">
+              <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                  <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="4,2">
+                    <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{TemplateBinding Foreground}"/>
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                      <Setter TargetName="bd" Property="Background" Value="#33888888"/>
+                    </Trigger>
+                    <Trigger Property="IsChecked" Value="True">
+                      <Setter TargetName="bd" Property="Background" Value="#5522D3EE"/>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </ToggleButton.Template>
+            </ToggleButton>
+            <Button x:Name="SaveMidiButton" Style="{StaticResource NoteToolBtn}" IsEnabled="False"
+                    ToolTip="Save as MIDI…" Click="SaveMidiButton_Click">
+              <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+            </Button>
+            <Button x:Name="CopyNotesButton" Style="{StaticResource NoteToolBtn}" IsEnabled="False"
+                    ToolTip="Copy notes as text" Click="CopyNotesButton_Click">
+              <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+            </Button>
+          </StackPanel>
+        </Border>
+
+        <!-- Suggestion prompt: on a scale where semitones bunch (Linear/Mel), offer a one-click
+             switch to Log for evenly-spaced rows. Dismissible; auto-hidden on Log. -->
+        <Border x:Name="NoteSuggestion" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,10,0,0" Padding="10,5" CornerRadius="4" Background="{DynamicResource OverlayBackground}"
+                BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="Notes bunch on this scale — switch to Log for even semitone rows?"
+                       Foreground="{DynamicResource OverlayText}" VerticalAlignment="Center" FontSize="11"/>
+            <Button x:Name="NoteSuggestSwitch" Content="Switch to Log" Margin="10,0,4,0" Padding="8,2"
+                    Cursor="Hand" Click="NoteSuggestionSwitch_Click"/>
+            <Button x:Name="NoteSuggestDismiss" Style="{StaticResource NoteToolBtn}" Width="22"
+                    ToolTip="Dismiss" Click="NoteSuggestionDismiss_Click">
+              <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10"/>
+            </Button>
           </StackPanel>
         </Border>
       </Grid>

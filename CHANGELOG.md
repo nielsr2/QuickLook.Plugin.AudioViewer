@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.4.0] — Unreleased
 
 ### Added
+- Interactive MIDI-note overlay on the spectrogram (opt-in "Note layer" setting): draw notes
+  with a pencil tool, move/resize/select/delete them, and export to a Standard MIDI File or
+  copy them as text. Notes align on any frequency scale via the shared scale mapping, with a
+  one-click nudge to switch to the Log scale for evenly-spaced semitone rows.
 - Embedded tags (title, artist, album, year, genre) and cover art in the file-info
   overlay, via TagLibSharp.
 - Spectrogram axes: a frequency ruler (Linear/Log/Mel aware) and a time ruler that

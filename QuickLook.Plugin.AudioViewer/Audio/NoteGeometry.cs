@@ -54,6 +54,66 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             yBottom = (1.0 - uLo) * height;
         }
 
+        /// <summary>Which part of a note's horizontal extent a pixel x falls in.</summary>
+        public enum NoteEdge { Outside, Left, Body, Right }
+
+        /// <summary>
+        /// Classify a pixel x against a note drawn from <paramref name="leftX"/>..<paramref name="rightX"/>,
+        /// with an <paramref name="edgePx"/> grab tolerance (assumes the y is already known to be inside
+        /// the note's vertical band). Edges win over the body so a resize is reachable even on a narrow
+        /// note; the same tolerance pads the outside so thin notes and their edges stay grabbable.
+        /// </summary>
+        public static NoteEdge HitEdge(double px, double leftX, double rightX, double edgePx)
+        {
+            if (px < leftX - edgePx || px > rightX + edgePx) return NoteEdge.Outside;
+            if (Math.Abs(px - leftX) <= edgePx) return NoteEdge.Left;
+            if (Math.Abs(px - rightX) <= edgePx) return NoteEdge.Right;
+            if (px >= leftX && px <= rightX) return NoteEdge.Body;
+            return NoteEdge.Outside;
+        }
+
+        /// <summary>
+        /// Resolve a draw drag into a start time + duration: the fixed <paramref name="anchorSeconds"/>
+        /// press point and the current cursor time bound the span, supporting a leftward drag (start is
+        /// the smaller of the two), clamped to a minimum duration so a bare click still makes a note.
+        /// </summary>
+        public static void DrawSpan(double anchorSeconds, double currentSeconds, double minDurationSeconds,
+            out double startSeconds, out double durationSeconds)
+        {
+            double start = Math.Min(anchorSeconds, currentSeconds);
+            double end = Math.Max(anchorSeconds, currentSeconds);
+            if (start < 0) start = 0;
+            double dur = end - start;
+            if (dur < minDurationSeconds) dur = minDurationSeconds;
+            startSeconds = start;
+            durationSeconds = dur;
+        }
+
+        /// <summary>
+        /// Move a note's left edge to <paramref name="newStartSeconds"/> while keeping
+        /// <paramref name="fixedEndSeconds"/> pinned, honoring a minimum duration and a 0 s floor.
+        /// </summary>
+        public static void ResizeLeft(double fixedEndSeconds, double newStartSeconds, double minDurationSeconds,
+            out double startSeconds, out double durationSeconds)
+        {
+            double maxStart = fixedEndSeconds - minDurationSeconds;
+            double start = newStartSeconds;
+            if (start > maxStart) start = maxStart;
+            if (start < 0) start = 0;
+            startSeconds = start;
+            durationSeconds = fixedEndSeconds - start;
+        }
+
+        /// <summary>
+        /// New duration when a note's right edge is dragged to <paramref name="newEndSeconds"/> while its
+        /// <paramref name="fixedStartSeconds"/> stays put, clamped to a minimum duration.
+        /// </summary>
+        public static double ResizeRight(double fixedStartSeconds, double newEndSeconds, double minDurationSeconds)
+        {
+            double dur = newEndSeconds - fixedStartSeconds;
+            return dur < minDurationSeconds ? minDurationSeconds : dur;
+        }
+
         private static double Clamp01(double v) => v < 0 ? 0 : v > 1 ? 1 : v;
     }
 }

@@ -114,6 +114,20 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("Gamma", value, Domain);
         }
 
+        /// <summary>Show the interactive MIDI-note overlay on the spectrogram (draw/edit/export).</summary>
+        public static bool NoteLayerEnabled
+        {
+            get => SettingHelper.Get("NoteLayerEnabled", false, Domain);
+            set => SettingHelper.Set("NoteLayerEnabled", value, Domain);
+        }
+
+        /// <summary>Tempo (BPM) written into exported MIDI; only affects a DAW's bar/beat labeling.</summary>
+        public static int NoteExportBpm
+        {
+            get => SettingHelper.Get("NoteExportBpm", 120, Domain);
+            set => SettingHelper.Set("NoteExportBpm", value, Domain);
+        }
+
         private static TEnum ParseEnum<TEnum>(string key, TEnum failsafe) where TEnum : struct
         {
             var stored = SettingHelper.Get(key, failsafe.ToString(), Domain);

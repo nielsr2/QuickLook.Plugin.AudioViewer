@@ -64,6 +64,13 @@ namespace QuickLook.Plugin.AudioViewer.Theming
         internal static Color AxisText(bool isDark) => Hex(isDark ? "#FFBBBBBB" : "#FF555555");
         internal static Color AxisLine(bool isDark) => Hex(isDark ? "#FF6E6E6E" : "#FFAAAAAA");
 
+        // Note-overlay colors. A cyan hue (distinct from the warm Magma/Viridis colormaps) so
+        // notes read on either map; the fill carries ~0x80 alpha so the spectrogram shows through.
+        // The selected note switches to a contrasting amber for an unmistakable focus cue.
+        internal static Color NoteFill(bool isDark) => Hex(isDark ? "#8022D3EE" : "#800E7490");
+        internal static Color NoteBorder(bool isDark) => Hex(isDark ? "#FF67E8F9" : "#FF0E7490");
+        internal static Color NoteSelected(bool isDark) => Hex(isDark ? "#FFFDE047" : "#FFB45309");
+
         private static SolidColorBrush Frozen(string hex)
         {
             var b = new SolidColorBrush(Hex(hex));

@@ -67,6 +67,11 @@ namespace QuickLook.Plugin.AudioViewer
         // open (stays visible when not hovering) until unpinned or closed via the ✕.
         private bool _infoPinned;
 
+        // Note-layer state: the shared, in-memory note list the overlay edits in place, plus a
+        // session flag so the "switch to Log" suggestion stays dismissed once the user closes it.
+        private readonly System.Collections.Generic.List<NoteModel> _notes = new System.Collections.Generic.List<NoteModel>();
+        private bool _noteSuggestionDismissed;
+
         private static readonly int[] FftSizes = { 512, 1024, 2048, 4096 };
         private static readonly int[] MaxFreqs = { 0, 20000, 10000, 5000 };
 
@@ -94,6 +99,7 @@ namespace QuickLook.Plugin.AudioViewer
             AutoPlayCheck.IsChecked = PluginSettings.AutoPlay;
             InitSettingsControls();
             Waveform.SeekRequested += OnWaveformSeek; // click/drag on the waveform seeks
+            Notes.NotesChanged += OnNotesChanged;      // overlay draw/edit/delete -> refresh export buttons
             Loaded += OnLoaded;
         }
 
@@ -110,6 +116,8 @@ namespace QuickLook.Plugin.AudioViewer
             FreqRuler.SetTheme(axisText, axisLine);
             TimeAxis.SetTheme(axisText, axisLine);
             Colorbar.SetTheme(axisText);
+            Notes.SetTheme(ThemePalette.NoteFill(_isDark), ThemePalette.NoteBorder(_isDark),
+                ThemePalette.NoteSelected(_isDark));
         }
 
         private void OnWaveformSeek(double fraction)
@@ -124,6 +132,7 @@ namespace QuickLook.Plugin.AudioViewer
             FileInfoCheck.IsChecked = PluginSettings.ShowFileInfo;
             FileInfoStyleCombo.SelectedIndex = (int)PluginSettings.FileInfoDisplay;
             HoverModeCombo.SelectedIndex = (int)PluginSettings.HoverReadoutMode;
+            NoteLayerCheck.IsChecked = PluginSettings.NoteLayerEnabled;
             LayoutCombo.SelectedIndex = (int)PluginSettings.Layout;
             FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
             AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
@@ -334,6 +343,24 @@ namespace QuickLook.Plugin.AudioViewer
         // bubble up to the host untouched.
         private void OnPreviewKeyDown(object sender, KeyEventArgs e)
         {
+            // Note-layer editing keys, handled before the media keys so they take precedence when
+            // the layer is on. Delete/Backspace removes the selected note; Escape cancels an
+            // in-progress draw (and only then is swallowed, so a plain Esc still reaches the host).
+            if (PluginSettings.NoteLayerEnabled)
+            {
+                if ((e.Key == Key.Delete || e.Key == Key.Back) && Notes.HasSelection)
+                {
+                    Notes.DeleteSelected();
+                    e.Handled = true;
+                    return;
+                }
+                if (e.Key == Key.Escape && Notes.CancelDraw())
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             if (_player == null) return;
             switch (e.Key)
             {
@@ -792,6 +819,7 @@ namespace QuickLook.Plugin.AudioViewer
             {
                 FreqRuler.Visibility = Visibility.Collapsed;
                 Colorbar.Visibility = Visibility.Collapsed;
+                RefreshNotes(); // keep the overlay/toolbar in step (hidden while the spectrogram is off)
                 return;
             }
 
@@ -803,6 +831,113 @@ namespace QuickLook.Plugin.AudioViewer
                 PluginSettings.ReverseColormap, PluginSettings.Gamma);
             FreqRuler.Visibility = Visibility.Visible;
             Colorbar.Visibility = Visibility.Visible;
+            RefreshNotes(); // re-align the note overlay on the same scale/fMin/fMax
+        }
+
+        /// <summary>
+        /// Align the note overlay + toolbar to the current spectrogram state. Uses the SAME
+        /// scale/fMin/fMax as <see cref="RefreshAxes"/> so notes line up on any scale/max-freq;
+        /// visibility follows <see cref="PluginSettings.NoteLayerEnabled"/> and the spectrogram
+        /// actually being shown (you draw on the spectrogram).
+        /// </summary>
+        private void RefreshNotes()
+        {
+            bool show = PluginSettings.NoteLayerEnabled
+                        && _spectrogramBuilt && _spectrogramFrames != null && _spectrogramFrames.Length > 0
+                        && SpectrogramImage.Visibility == Visibility.Visible;
+
+            if (show)
+            {
+                var scale = PluginSettings.FreqScale;
+                double fMin = FrequencyScaleMapper.EffectiveFMin(scale, _spectrogramFftSize, _spectrogramSampleRate);
+                double fMax = FrequencyScaleMapper.EffectiveFMax(_spectrogramSampleRate, PluginSettings.MaxFrequencyHz);
+                Notes.Configure(scale, fMin, fMax, _player?.Duration.TotalSeconds ?? 0, _notes);
+                UpdateNoteExportButtons();
+            }
+
+            Notes.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            NoteToolbar.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (!show && Notes.DrawMode)
+            {
+                Notes.DrawMode = false; // leaving the layer exits draw mode so the hover readout returns
+                DrawToggle.IsChecked = false;
+            }
+            UpdateNoteSuggestion();
+        }
+
+        /// <summary>
+        /// Show the "switch to Log" nudge only while the note layer is active on a scale where
+        /// semitones bunch (Linear/Mel) and the user hasn't dismissed it; hidden on Log.
+        /// </summary>
+        private void UpdateNoteSuggestion()
+        {
+            bool bunching = PluginSettings.FreqScale == FrequencyScale.Linear
+                            || PluginSettings.FreqScale == FrequencyScale.Mel;
+            bool show = NoteToolbar.Visibility == Visibility.Visible && bunching && !_noteSuggestionDismissed;
+            NoteSuggestion.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void UpdateNoteExportButtons()
+        {
+            bool any = _notes.Count > 0;
+            SaveMidiButton.IsEnabled = any;
+            CopyNotesButton.IsEnabled = any;
+        }
+
+        private void OnNotesChanged() => UpdateNoteExportButtons();
+
+        private void NoteLayerCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.NoteLayerEnabled = NoteLayerCheck.IsChecked == true;
+            if (!PluginSettings.NoteLayerEnabled) _noteSuggestionDismissed = false; // let it reappear next time
+            RefreshNotes();
+        }
+
+        private void DrawToggle_Click(object sender, RoutedEventArgs e)
+        {
+            Notes.DrawMode = DrawToggle.IsChecked == true;
+            Focus(); // return keyboard focus to the control so Delete/Esc reach OnPreviewKeyDown
+        }
+
+        private void SaveMidiButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_notes.Count == 0) return;
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "MIDI file (*.mid)|*.mid",
+                FileName = Path.GetFileNameWithoutExtension(_path) + ".mid"
+            };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                MidiExporter.WriteMidi(dlg.FileName, _notes, PluginSettings.NoteExportBpm);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Could not save the MIDI file. " + ex.Message, "Save as MIDI",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void CopyNotesButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_notes.Count == 0) return;
+            try { Clipboard.SetText(NoteTextSerializer.Format(_notes)); }
+            catch { /* clipboard can be transiently locked by another app; ignore */ }
+        }
+
+        private void NoteSuggestionSwitch_Click(object sender, RoutedEventArgs e)
+        {
+            // Sets the scale to Log via the same combo the user would use; FreqCombo_Changed
+            // re-renders, and the follow-on RefreshNotes hides this prompt (no longer bunching).
+            FreqCombo.SelectedIndex = (int)FrequencyScale.Log;
+        }
+
+        private void NoteSuggestionDismiss_Click(object sender, RoutedEventArgs e)
+        {
+            _noteSuggestionDismissed = true;
+            NoteSuggestion.Visibility = Visibility.Collapsed;
         }
 
         private void SpectrogramImage_MouseMove(object sender, MouseEventArgs e)
