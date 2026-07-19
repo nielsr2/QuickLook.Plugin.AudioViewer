@@ -118,6 +118,7 @@ namespace QuickLook.Plugin.AudioViewer
         {
             _initializingSettings = true;
             FileInfoCheck.IsChecked = PluginSettings.ShowFileInfo;
+            FileInfoStyleCombo.SelectedIndex = (int)PluginSettings.FileInfoDisplay;
             LayoutCombo.SelectedIndex = (int)PluginSettings.Layout;
             FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
             AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
@@ -164,9 +165,7 @@ namespace QuickLook.Plugin.AudioViewer
                 SetTimelineWidth(_player.Duration.TotalSeconds);
                 FileInfoText.Text = ComposeInfoText(tags, infoText);
                 SetAlbumArt(tags?.CoverArt);
-                FileInfoTranslate.X = PluginSettings.InfoPosX; // restore last dragged position
-                FileInfoTranslate.Y = PluginSettings.InfoPosY;
-                FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
+                ApplyFileInfoMode(); // configure hover-pill vs. draggable-box presentation
                 StatusText.Visibility = Visibility.Collapsed;
                 UpdateTimeText();
 
@@ -351,7 +350,74 @@ namespace QuickLook.Plugin.AudioViewer
         {
             if (_initializingSettings) return;
             PluginSettings.ShowFileInfo = FileInfoCheck.IsChecked == true;
-            FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
+            ApplyFileInfoMode(); // master on/off; re-applies the current presentation mode
+        }
+
+        private void FileInfoStyleCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || FileInfoStyleCombo.SelectedIndex < 0) return;
+            PluginSettings.FileInfoDisplay = (FileInfoDisplay)FileInfoStyleCombo.SelectedIndex;
+            ApplyFileInfoMode();
+        }
+
+        // True while the file-info overlay is in the unobtrusive hover-pill mode.
+        private bool IsHoverInfoMode => PluginSettings.FileInfoDisplay == FileInfoDisplay.HoverIcon;
+
+        /// <summary>Configure the file-info overlay for the current FileInfoDisplay + ShowFileInfo.</summary>
+        private void ApplyFileInfoMode()
+        {
+            bool show = PluginSettings.ShowFileInfo;
+            if (IsHoverInfoMode)
+            {
+                // Unobtrusive pill; the box is revealed on hover (ShowHoverFileInfo) and
+                // auto-hides on mouse-leave. Not draggable, no ✕.
+                InfoIcon.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                FileInfoClose.Visibility = Visibility.Collapsed;
+                FileInfoPanel.Cursor = Cursors.Arrow;
+                FileInfoPanel.Visibility = Visibility.Collapsed; // shown only while hovering
+            }
+            else // DraggableBox: today's behavior.
+            {
+                InfoIcon.Visibility = Visibility.Collapsed;
+                FileInfoClose.Visibility = Visibility.Visible;
+                FileInfoPanel.Cursor = Cursors.SizeAll;
+                FileInfoTranslate.X = PluginSettings.InfoPosX; // restore last dragged position
+                FileInfoTranslate.Y = PluginSettings.InfoPosY;
+                FileInfoPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        // Hover-pill mode: reveal the info box directly above the pill (both anchored
+        // bottom-right, so a negative Y translate lifts the box to sit on top of it).
+        private void InfoIcon_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (!IsHoverInfoMode) return;
+            FileInfoTranslate.X = 0;
+            FileInfoPanel.Visibility = Visibility.Visible;
+            FileInfoPanel.UpdateLayout(); // so InfoIcon.ActualHeight reflects the rendered pill
+            double lift = InfoIcon.ActualHeight > 0 ? InfoIcon.ActualHeight : 26;
+            FileInfoTranslate.Y = -lift; // box bottom meets pill top (touching; no dead zone)
+        }
+
+        private void InfoIcon_MouseLeave(object sender, MouseEventArgs e) => ScheduleHoverInfoHide();
+
+        private void FileInfoPanel_MouseLeave(object sender, MouseEventArgs e)
+        {
+            if (!IsHoverInfoMode) return;
+            ScheduleHoverInfoHide();
+        }
+
+        // Defer the hide so moving between the touching pill and box (which fires
+        // MouseLeave on one just before MouseEnter on the other) doesn't flicker it away:
+        // by Background priority, IsMouseOver reflects wherever the pointer landed.
+        private void ScheduleHoverInfoHide()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!IsHoverInfoMode) return;
+                if (InfoIcon.IsMouseOver || FileInfoPanel.IsMouseOver) return;
+                FileInfoPanel.Visibility = Visibility.Collapsed;
+            }), DispatcherPriority.Background);
         }
 
         private void FileInfoClose_Click(object sender, MouseButtonEventArgs e)
@@ -364,6 +430,7 @@ namespace QuickLook.Plugin.AudioViewer
 
         private void FileInfoPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            if (IsHoverInfoMode) return; // dragging disabled in hover-icon mode
             _infoDragging = true;
             _infoDragStart = e.GetPosition(ViewPaneGrid);
             _infoStartX = FileInfoTranslate.X;

@@ -81,6 +81,12 @@
             <CheckBox x:Name="FileInfoCheck" Content="Show file info" Foreground="{DynamicResource PrimaryText}"
                       Margin="0,0,0,10" Checked="FileInfoCheck_Changed" Unchecked="FileInfoCheck_Changed"/>
 
+            <TextBlock Text="File info style" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
+            <ComboBox x:Name="FileInfoStyleCombo" Margin="0,0,0,8" SelectionChanged="FileInfoStyleCombo_Changed">
+              <ComboBoxItem Content="Icon (hover)"/>
+              <ComboBoxItem Content="Draggable box"/>
+            </ComboBox>
+
             <TextBlock Text="Layout" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
             <ComboBox x:Name="LayoutCombo" Margin="0,0,0,8" SelectionChanged="LayoutCombo_Changed">
               <ComboBoxItem Content="Stacked"/>
@@ -207,9 +213,11 @@
                      FontFamily="Consolas, Courier New" FontSize="11"/>
         </Border>
 
-        <!-- File-info overlay (toggled from settings). Bottom-right by default;
-             draggable anywhere in the pane; a ✕ closes it. Wheel events are
-             forwarded so the timeline still scrolls when the pointer is over it. -->
+        <!-- File-info overlay. Two presentation modes (see PluginSettings.FileInfoDisplay):
+             HoverIcon (default) reveals this box while the InfoIcon pill is hovered and
+             auto-hides it; DraggableBox anchors it bottom-right, draggable anywhere with a
+             ✕ to dismiss and a remembered position. Wheel events are forwarded so the
+             timeline still scrolls when the pointer is over it. -->
         <Border x:Name="FileInfoPanel" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                 Margin="0,0,10,10" Padding="9,6,9,7" CornerRadius="3" Background="{DynamicResource OverlayBackground}"
                 BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed"
@@ -217,6 +225,7 @@
                 MouseLeftButtonDown="FileInfoPanel_MouseLeftButtonDown"
                 MouseMove="FileInfoPanel_MouseMove"
                 MouseLeftButtonUp="FileInfoPanel_MouseLeftButtonUp"
+                MouseLeave="FileInfoPanel_MouseLeave"
                 PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
           <Border.RenderTransform>
             <TranslateTransform x:Name="FileInfoTranslate"/>
@@ -237,6 +246,22 @@
             <TextBlock x:Name="FileInfoText" Grid.Row="2" Foreground="{DynamicResource OverlayText}"
                        FontFamily="Consolas, Courier New" FontSize="11"/>
           </Grid>
+        </Border>
+
+        <!-- Info affordance for HoverIcon mode: a small pill anchored bottom-right.
+             Hovering it reveals FileInfoPanel just above; the box auto-hides on leave. -->
+        <Border x:Name="InfoIcon" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,10,10" Padding="7,3" CornerRadius="10" Background="{DynamicResource OverlayBackground}"
+                BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed"
+                Cursor="Hand" ToolTip="File info"
+                MouseEnter="InfoIcon_MouseEnter" MouseLeave="InfoIcon_MouseLeave"
+                PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                       Foreground="{DynamicResource OverlayText}" VerticalAlignment="Center"/>
+            <TextBlock Text="info" Foreground="{DynamicResource OverlayText}"
+                       FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
+          </StackPanel>
         </Border>
       </Grid>
 

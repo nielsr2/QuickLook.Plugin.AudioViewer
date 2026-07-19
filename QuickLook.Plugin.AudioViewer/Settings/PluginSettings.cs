@@ -14,9 +14,11 @@ namespace QuickLook.Plugin.AudioViewer.Settings
         }
 
         /// <summary>Show the file-info overlay (format, channels, bitrate, …).</summary>
+        /// <remarks>Defaults to true: the default HoverIcon style is an unobtrusive
+        /// info pill, so the overlay is available out of the box without getting in the way.</remarks>
         public static bool ShowFileInfo
         {
-            get => SettingHelper.Get("ShowFileInfo", false, Domain);
+            get => SettingHelper.Get("ShowFileInfo", true, Domain);
             set => SettingHelper.Set("ShowFileInfo", value, Domain);
         }
 
@@ -61,6 +63,13 @@ namespace QuickLook.Plugin.AudioViewer.Settings
         {
             get => ParseEnum("Colormap", SpectrogramColormap.Magma);
             set => SettingHelper.Set("Colormap", value.ToString(), Domain);
+        }
+
+        /// <summary>How the file-info overlay is presented (hover pill vs. draggable box).</summary>
+        public static FileInfoDisplay FileInfoDisplay
+        {
+            get => ParseEnum("FileInfoDisplay", FileInfoDisplay.HoverIcon);
+            set => SettingHelper.Set("FileInfoDisplay", value.ToString(), Domain);
         }
 
         /// <summary>FFT window length (power of two): 512 / 1024 / 2048 / 4096.</summary>

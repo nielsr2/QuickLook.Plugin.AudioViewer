@@ -33,4 +33,13 @@ namespace QuickLook.Plugin.AudioViewer.Settings
         Viridis,
         Grayscale
     }
+
+    /// <summary>How the file-info overlay is presented.</summary>
+    public enum FileInfoDisplay
+    {
+        /// <summary>Unobtrusive info pill in the bottom-right; hovering it reveals the box, which auto-hides.</summary>
+        HoverIcon,
+        /// <summary>Full info box: draggable anywhere in the pane, with a ✕ to dismiss, remembers its position.</summary>
+        DraggableBox
+    }
 }
