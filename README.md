@@ -19,10 +19,12 @@ A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
   (a button toggles between the full-area waveform and spectrogram).
 - **Frequency scale** — Linear, Log, or Mel.
 - **Amplitude** — Decibel (dB) or Linear.
-- **Colormap** — Magma, Viridis, or Grayscale.
+- **Colormap** — Magma, Viridis, Grayscale, Inferno, Plasma, Turbo, or Heat (RX-style).
+- **Reverse colormap** — flip any map light-based (for print / light backgrounds).
 - **FFT size** — 512 / 1024 / 2048 / 4096 (time-vs-frequency resolution).
 - **Max frequency** — Full / 20 kHz / 10 kHz / 5 kHz.
-- **Contrast** — dB-floor slider.
+- **Contrast** — dB-floor slider (black clip point).
+- **Gamma (detail)** — lifts quiet detail without moving the noise floor.
 - **Hover readout** — MIDI note (default) or Frequency: what the cursor shows over the
   spectrogram (time · nearest note or Hz · level).
 - **Show file info** — an overlay with embedded tags (title, artist, album, year,

@@ -14,8 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Colorbar legend showing the active colormap and its dB / magnitude range.
 - Hover readout showing time, the nearest MIDI note (default) or frequency, and the
   level under the cursor on the spectrogram, with a "Hover readout" setting to switch.
-- File-info overlay display modes: an unobtrusive hover "info" pill (default) or the
-  draggable box, via a "File info style" setting.
+- File-info overlay display modes: an unobtrusive hover "info" pill (default, clickable
+  to pin it open) or the draggable box, via a "File info style" setting.
+- More spectrogram colormaps — Inferno, Plasma, Turbo, and an RX-style Heat ramp — plus a
+  Reverse toggle (light-based maps for print) and a Gamma "detail" slider that lifts quiet
+  detail without moving the noise floor.
 - Light/dark theme awareness — the UI follows QuickLook's theme.
 - Click-to-seek on the waveform, and click-to-seek on the seek-bar track.
 - Keyboard shortcuts: `K` play/pause, `J`/`L` seek ±5 s, `M` mute, `+`/`-` volume.
