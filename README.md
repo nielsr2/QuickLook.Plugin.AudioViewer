@@ -94,6 +94,11 @@ release workflow, which builds, packages the `.qlplugin`, and attaches it to a
 GitHub Release. CI builds and runs the tests on every push/PR. See
 [CHANGELOG.md](CHANGELOG.md) for release notes.
 
+## Roadmap 
+
+- visual presets for waveform
+- mono vs stereo - have a feature that allows seperate each channel if present. this would stack waveform + spec - possibly other things as well.
+
 ## License
 
 [MIT](LICENSE) © nielsr2.
