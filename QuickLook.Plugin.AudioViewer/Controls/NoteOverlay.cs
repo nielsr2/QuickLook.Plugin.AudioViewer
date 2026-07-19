@@ -153,10 +153,17 @@ namespace QuickLook.Plugin.AudioViewer.Controls
 
         protected override void OnRender(DrawingContext dc)
         {
-            // No background rectangle: the overlay must be transparent so the spectrogram shows through.
-            if (_notes == null || _notes.Count == 0) return;
             double w = ActualWidth, h = ActualHeight;
-            if (w <= 0 || h <= 0 || _fMax <= _fMin || _durationSeconds <= 0) return;
+            if (w <= 0 || h <= 0) return;
+
+            // A FrameworkElement receives mouse events only where it has painted. To stay
+            // visually transparent yet still capture draw clicks across the whole pane (so
+            // you can draw the FIRST note on empty space), paint a fully-transparent fill.
+            // Hit-testing is still gated by IsHitTestVisible (draw mode), so the view-mode
+            // hover readout is unaffected.
+            dc.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, w, h));
+
+            if (_notes == null || _notes.Count == 0 || _fMax <= _fMin || _durationSeconds <= 0) return;
 
             double dpi = PixelsPerDip();
             foreach (var n in _notes)
