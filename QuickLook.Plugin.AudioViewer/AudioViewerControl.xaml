@@ -117,7 +117,18 @@
               <ComboBoxItem Content="Magma"/>
               <ComboBoxItem Content="Viridis"/>
               <ComboBoxItem Content="Grayscale"/>
+              <ComboBoxItem Content="Inferno"/>
+              <ComboBoxItem Content="Plasma"/>
+              <ComboBoxItem Content="Turbo"/>
+              <ComboBoxItem Content="Heat"/>
             </ComboBox>
+
+            <CheckBox x:Name="ReverseCheck" Content="Reverse colormap" Foreground="{DynamicResource PrimaryText}"
+                      Margin="0,0,0,8" Checked="ReverseCheck_Changed" Unchecked="ReverseCheck_Changed"/>
+
+            <TextBlock Text="Gamma (detail)" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
+            <Slider x:Name="GammaSlider" Margin="0,0,0,8" Minimum="0.3" Maximum="2.0"
+                    SmallChange="0.05" LargeChange="0.25" ValueChanged="GammaSlider_Changed"/>
 
             <TextBlock Text="FFT size" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
             <ComboBox x:Name="FftCombo" Margin="0,0,0,8" SelectionChanged="FftCombo_Changed">

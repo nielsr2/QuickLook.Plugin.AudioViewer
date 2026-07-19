@@ -31,7 +31,11 @@ namespace QuickLook.Plugin.AudioViewer.Settings
     {
         Magma,
         Viridis,
-        Grayscale
+        Grayscale,
+        Inferno,
+        Plasma,
+        Turbo,
+        Heat
     }
 
     /// <summary>How the file-info overlay is presented.</summary>

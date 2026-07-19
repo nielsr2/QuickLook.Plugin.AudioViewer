@@ -19,6 +19,10 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         public FrequencyScale FrequencyScale { get; set; } = FrequencyScale.Linear;
         public AmplitudeScale AmplitudeScale { get; set; } = AmplitudeScale.Decibel;
         public SpectrogramColormap Colormap { get; set; } = SpectrogramColormap.Magma;
+        /// <summary>Invert the colormap (high magnitude maps to the dark end).</summary>
+        public bool ReverseColormap { get; set; }
+        /// <summary>Gamma applied to the normalized magnitude before coloring (1 = linear; &lt;1 lifts detail).</summary>
+        public double Gamma { get; set; } = 1.0;
         /// <summary>Contrast floor in dB (negative). In dB mode this is the absolute black level.</summary>
         public double DbFloor { get; set; } = -90;
         /// <summary>Top of the axis in Hz; &lt;= 0 means full (Nyquist).</summary>
@@ -236,6 +240,8 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             ceiling = black + range; // top of the color scale, in the amplitude domain
 
             // Pass 2: normalize + colorize. y=0 is the top => highest frequency.
+            double gamma = o.Gamma > 0 ? o.Gamma : 1.0;
+            bool reverse = o.ReverseColormap;
             for (int x = 0; x < pw; x++)
             {
                 for (int y = 0; y < ph; y++)
@@ -243,6 +249,8 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                     int r = ph - 1 - y;
                     double t = (vals[x * ph + r] - black) / range;
                     if (t < 0) t = 0; else if (t > 1) t = 1;
+                    t = Math.Pow(t, gamma);
+                    if (reverse) t = 1 - t;
                     Colormaps.Sample(o.Colormap, t, out byte cr, out byte cg, out byte cb);
 
                     int idx = (y * pw + x) * 4;

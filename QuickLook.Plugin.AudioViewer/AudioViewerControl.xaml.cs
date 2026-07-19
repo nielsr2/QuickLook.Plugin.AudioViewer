@@ -128,6 +128,8 @@ namespace QuickLook.Plugin.AudioViewer
             FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
             AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
             ColorCombo.SelectedIndex = (int)PluginSettings.Colormap;
+            ReverseCheck.IsChecked = PluginSettings.ReverseColormap;
+            GammaSlider.Value = PluginSettings.Gamma;
             FftCombo.SelectedIndex = Math.Max(0, Array.IndexOf(FftSizes, PluginSettings.FftSize));
             MaxFreqCombo.SelectedIndex = Math.Max(0, Array.IndexOf(MaxFreqs, PluginSettings.MaxFrequencyHz));
             ContrastSlider.Value = PluginSettings.DbFloor;
@@ -538,6 +540,20 @@ namespace QuickLook.Plugin.AudioViewer
             RenderSpectrogram();
         }
 
+        private void ReverseCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.ReverseColormap = ReverseCheck.IsChecked == true;
+            RenderSpectrogram();
+        }
+
+        private void GammaSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.Gamma = e.NewValue;
+            RenderSpectrogram();
+        }
+
         private void FftCombo_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (_initializingSettings || FftCombo.SelectedIndex < 0) return;
@@ -700,6 +716,8 @@ namespace QuickLook.Plugin.AudioViewer
                 FrequencyScale = PluginSettings.FreqScale,
                 AmplitudeScale = PluginSettings.AmpScale,
                 Colormap = PluginSettings.Colormap,
+                ReverseColormap = PluginSettings.ReverseColormap,
+                Gamma = PluginSettings.Gamma,
                 DbFloor = PluginSettings.DbFloor,
                 MaxFrequencyHz = PluginSettings.MaxFrequencyHz
             };
@@ -781,7 +799,8 @@ namespace QuickLook.Plugin.AudioViewer
             double fMin = FrequencyScaleMapper.EffectiveFMin(scale, _spectrogramFftSize, _spectrogramSampleRate);
             double fMax = FrequencyScaleMapper.EffectiveFMax(_spectrogramSampleRate, PluginSettings.MaxFrequencyHz);
             FreqRuler.Configure(scale, fMin, fMax, _specTopFraction);
-            Colorbar.Configure(PluginSettings.Colormap, _lastLevels, _specTopFraction);
+            Colorbar.Configure(PluginSettings.Colormap, _lastLevels, _specTopFraction,
+                PluginSettings.ReverseColormap, PluginSettings.Gamma);
             FreqRuler.Visibility = Visibility.Visible;
             Colorbar.Visibility = Visibility.Visible;
         }

@@ -19,6 +19,8 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         private SpectrogramColormap _colormap = SpectrogramColormap.Magma;
         private SpectrogramLevels _levels;
         private double _topFraction;
+        private bool _reverse;
+        private double _gamma = 1.0;
         private bool _configured;
         private Brush _text = Brushes.Gray;
         private readonly Typeface _face = new Typeface("Segoe UI");
@@ -29,11 +31,14 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             InvalidateVisual();
         }
 
-        public void Configure(SpectrogramColormap map, SpectrogramLevels levels, double topFraction)
+        public void Configure(SpectrogramColormap map, SpectrogramLevels levels, double topFraction,
+            bool reverse = false, double gamma = 1.0)
         {
             _colormap = map;
             _levels = levels;
             _topFraction = topFraction;
+            _reverse = reverse;
+            _gamma = gamma > 0 ? gamma : 1.0;
             _configured = true;
             InvalidateVisual();
         }
@@ -53,7 +58,12 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             for (int i = 0; i <= stops; i++)
             {
                 double frac = 1.0 - (double)i / stops;
-                Colormaps.Sample(_colormap, frac, out byte r, out byte g, out byte b);
+                // Match the image: apply the same gamma+reverse transform to the
+                // normalized fraction before sampling, so the legend colors are truthful.
+                // The dB/magnitude labels stay at their linear positions (LabelFor).
+                double ct = Math.Pow(frac, _gamma);
+                if (_reverse) ct = 1 - ct;
+                Colormaps.Sample(_colormap, ct, out byte r, out byte g, out byte b);
                 grad.GradientStops.Add(new GradientStop(Color.FromRgb(r, g, b), (double)i / stops));
             }
             grad.Freeze();

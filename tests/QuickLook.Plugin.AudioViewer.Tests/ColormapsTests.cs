@@ -32,6 +32,9 @@ namespace QuickLook.Plugin.AudioViewer.Tests
         [InlineData(SpectrogramColormap.Magma)]
         [InlineData(SpectrogramColormap.Viridis)]
         [InlineData(SpectrogramColormap.Grayscale)]
+        [InlineData(SpectrogramColormap.Inferno)]
+        [InlineData(SpectrogramColormap.Plasma)]
+        [InlineData(SpectrogramColormap.Heat)]
         public void Luminance_IsMonotonic_LowToHigh(SpectrogramColormap map)
         {
             Colormaps.Sample(map, 0.0, out var r0, out var g0, out var b0);
@@ -50,10 +53,50 @@ namespace QuickLook.Plugin.AudioViewer.Tests
             Assert.Equal(252, (int)r1); Assert.Equal(253, (int)g1); Assert.Equal(191, (int)b1);
         }
 
+        [Fact]
+        public void Inferno_Endpoints_MatchStops()
+        {
+            Colormaps.Sample(SpectrogramColormap.Inferno, 0.0, out var r0, out var g0, out var b0);
+            Colormaps.Sample(SpectrogramColormap.Inferno, 1.0, out var r1, out var g1, out var b1);
+            Assert.Equal(0, (int)r0); Assert.Equal(0, (int)g0); Assert.Equal(4, (int)b0);
+            Assert.Equal(252, (int)r1); Assert.Equal(255, (int)g1); Assert.Equal(164, (int)b1);
+        }
+
+        [Fact]
+        public void Plasma_Endpoints_MatchStops()
+        {
+            Colormaps.Sample(SpectrogramColormap.Plasma, 0.0, out var r0, out var g0, out var b0);
+            Colormaps.Sample(SpectrogramColormap.Plasma, 1.0, out var r1, out var g1, out var b1);
+            Assert.Equal(13, (int)r0); Assert.Equal(8, (int)g0); Assert.Equal(135, (int)b0);
+            Assert.Equal(240, (int)r1); Assert.Equal(249, (int)g1); Assert.Equal(33, (int)b1);
+        }
+
+        [Fact]
+        public void Turbo_Endpoints_MatchStops()
+        {
+            Colormaps.Sample(SpectrogramColormap.Turbo, 0.0, out var r0, out var g0, out var b0);
+            Colormaps.Sample(SpectrogramColormap.Turbo, 1.0, out var r1, out var g1, out var b1);
+            Assert.Equal(48, (int)r0); Assert.Equal(18, (int)g0); Assert.Equal(59, (int)b0);
+            Assert.Equal(122, (int)r1); Assert.Equal(4, (int)g1); Assert.Equal(2, (int)b1);
+        }
+
+        [Fact]
+        public void Heat_Endpoints_MatchStops()
+        {
+            Colormaps.Sample(SpectrogramColormap.Heat, 0.0, out var r0, out var g0, out var b0);
+            Colormaps.Sample(SpectrogramColormap.Heat, 1.0, out var r1, out var g1, out var b1);
+            Assert.Equal(0, (int)r0); Assert.Equal(0, (int)g0); Assert.Equal(0, (int)b0);
+            Assert.Equal(255, (int)r1); Assert.Equal(255, (int)g1); Assert.Equal(255, (int)b1);
+        }
+
         [Theory]
         [InlineData(SpectrogramColormap.Magma)]
         [InlineData(SpectrogramColormap.Viridis)]
         [InlineData(SpectrogramColormap.Grayscale)]
+        [InlineData(SpectrogramColormap.Inferno)]
+        [InlineData(SpectrogramColormap.Plasma)]
+        [InlineData(SpectrogramColormap.Turbo)]
+        [InlineData(SpectrogramColormap.Heat)]
         public void Sample_ClampsOutOfRange(SpectrogramColormap map)
         {
             Colormaps.Sample(map, -1.0, out var rn, out var gn, out var bn);

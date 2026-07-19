@@ -100,6 +100,20 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("DbFloor", value, Domain);
         }
 
+        /// <summary>Invert the colormap so high magnitudes map to its dark end (and vice versa).</summary>
+        public static bool ReverseColormap
+        {
+            get => SettingHelper.Get("ReverseColormap", false, Domain);
+            set => SettingHelper.Set("ReverseColormap", value, Domain);
+        }
+
+        /// <summary>Gamma applied to the normalized magnitude before coloring; &lt;1 lifts quiet detail.</summary>
+        public static double Gamma
+        {
+            get => SettingHelper.Get("Gamma", 1.0, Domain);
+            set => SettingHelper.Set("Gamma", value, Domain);
+        }
+
         private static TEnum ParseEnum<TEnum>(string key, TEnum failsafe) where TEnum : struct
         {
             var stored = SettingHelper.Get(key, failsafe.ToString(), Domain);
