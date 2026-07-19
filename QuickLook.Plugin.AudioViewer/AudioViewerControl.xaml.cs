@@ -259,12 +259,14 @@ namespace QuickLook.Plugin.AudioViewer
             SeekTo(SeekSlider.Value);
         }
 
-        // Fires for track-clicks and keyboard changes (IsMoveToPointEnabled). Thumb-drags
-        // are handled by DragStarted/DragCompleted (_scrubbing), and Tick()'s programmatic
-        // writes are suppressed, so this only seeks on genuine user value changes.
+        // Fires for track-clicks, keyboard changes, and thumb-drags. We seek live even
+        // while dragging (_scrubbing) so the waveform, spectrogram, and time readout track
+        // the drag instead of only updating on release. Tick() is suppressed during
+        // _scrubbing, so it won't fight these updates; only Tick()'s own programmatic
+        // writes (guarded by _suppressSeekValueChanged) are ignored here.
         private void SeekSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (_suppressSeekValueChanged || _scrubbing || _player == null) return;
+            if (_suppressSeekValueChanged || _player == null) return;
             SeekTo(e.NewValue);
         }
 
