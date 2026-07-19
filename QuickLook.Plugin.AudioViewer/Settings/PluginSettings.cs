@@ -35,6 +35,23 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("InfoPosY", value, Domain);
         }
 
+        /// <summary>
+        /// Remembered size of the resizable settings popup. Always re-clamped through
+        /// <see cref="SettingsPaneMetrics"/> on load: the stored value may have come from
+        /// a larger monitor than the one currently in use.
+        /// </summary>
+        public static int SettingsPaneWidth
+        {
+            get => SettingHelper.Get("SettingsPaneWidth", (int)SettingsPaneMetrics.DefaultWidth, Domain);
+            set => SettingHelper.Set("SettingsPaneWidth", value, Domain);
+        }
+
+        public static int SettingsPaneHeight
+        {
+            get => SettingHelper.Get("SettingsPaneHeight", 0, Domain); // 0 = "fit the screen"
+            set => SettingHelper.Set("SettingsPaneHeight", value, Domain);
+        }
+
         // Enum settings are stored as their string name: SettingHelper round-trips
         // primitives via Convert.ChangeType, which cannot parse enum names (it would
         // silently fall back to the default). Enum.TryParse on the stored name restores

@@ -142,7 +142,40 @@ namespace QuickLook.Plugin.AudioViewer
             FftCombo.SelectedIndex = Math.Max(0, Array.IndexOf(FftSizes, PluginSettings.FftSize));
             MaxFreqCombo.SelectedIndex = Math.Max(0, Array.IndexOf(MaxFreqs, PluginSettings.MaxFrequencyHz));
             ContrastSlider.Value = PluginSettings.DbFloor;
+            ApplySettingsPaneSize();
             _initializingSettings = false;
+        }
+
+        /// <summary>
+        /// Restore the remembered settings-popup size, re-clamped to this screen. A height
+        /// of 0 means "never resized" and starts from the screen-aware default.
+        /// </summary>
+        private void ApplySettingsPaneSize()
+        {
+            double workArea = SystemParameters.WorkArea.Height;
+            int savedHeight = PluginSettings.SettingsPaneHeight;
+
+            SettingsPanel.Width = SettingsPaneMetrics.ClampWidth(PluginSettings.SettingsPaneWidth);
+            SettingsPanel.Height = savedHeight > 0
+                ? SettingsPaneMetrics.ClampHeight(savedHeight, workArea)
+                : SettingsPaneMetrics.DefaultHeightFor(workArea);
+        }
+
+        private void SettingsResizeGrip_DragDelta(object sender, DragDeltaEventArgs e)
+        {
+            SettingsPanel.Width =
+                SettingsPaneMetrics.ClampWidth(SettingsPanel.Width + e.HorizontalChange);
+            SettingsPanel.Height =
+                SettingsPaneMetrics.ClampHeight(SettingsPanel.Height + e.VerticalChange,
+                                                SystemParameters.WorkArea.Height);
+        }
+
+        private void SettingsResizeGrip_DragCompleted(object sender, DragCompletedEventArgs e)
+        {
+            // Persist once at the end of the drag, not per delta: SettingHelper rewrites
+            // the whole XML document on every Set.
+            PluginSettings.SettingsPaneWidth = (int)Math.Round(SettingsPanel.Width);
+            PluginSettings.SettingsPaneHeight = (int)Math.Round(SettingsPanel.Height);
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)

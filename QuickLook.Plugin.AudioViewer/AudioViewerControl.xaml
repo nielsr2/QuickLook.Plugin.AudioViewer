@@ -66,6 +66,27 @@
       <Setter Property="Margin" Value="0,12,0,12"/>
       <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
+
+    <!-- Corner grip that resizes the settings popup (see SettingsResizeGrip_DragDelta). -->
+    <Style x:Key="SettingsResizeGrip" TargetType="Thumb">
+      <Setter Property="Width" Value="14"/>
+      <Setter Property="Height" Value="14"/>
+      <Setter Property="HorizontalAlignment" Value="Right"/>
+      <Setter Property="Margin" Value="0,6,0,0"/>
+      <Setter Property="Cursor" Value="SizeNWSE"/>
+      <Setter Property="ToolTip" Value="Drag to resize"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Thumb">
+            <!-- Transparent backing so the whole 14x14 box is draggable, not just the lines. -->
+            <Border Background="Transparent">
+              <Path Stroke="{DynamicResource SecondaryText}" StrokeThickness="1" Opacity="0.85"
+                    Data="M 13,3 L 3,13  M 13,7 L 7,13  M 13,11 L 11,13"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </UserControl.Resources>
   <!-- IsSharedSizeScope lets the seek bar and the horizontal scrollbar share the
        spectrogram's left/right gutter widths (frequency ruler and colorbar), so they
@@ -120,15 +141,29 @@
       <Popup PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Bottom"
              StaysOpen="False" AllowsTransparency="True"
              IsOpen="{Binding IsChecked, ElementName=SettingsButton, Mode=TwoWay}">
-        <Border Background="{DynamicResource PopupBackground}" BorderBrush="{DynamicResource PopupBorder}"
+        <!-- Size is set in code from the remembered PluginSettings values, re-clamped to the
+             current screen (SettingsPaneMetrics) so a size saved on a bigger monitor can't
+             push the last group off-screen. The user drags the corner grip to resize. -->
+        <Border x:Name="SettingsPanel" Background="{DynamicResource PopupBackground}"
+                BorderBrush="{DynamicResource PopupBorder}"
                 BorderThickness="1" Padding="12" Margin="0,4,10,10">
           <Border.Effect>
             <DropShadowEffect Color="#000000" BlurRadius="10" ShadowDepth="2" Opacity="0.5"/>
           </Border.Effect>
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="*"/>      <!-- scrollable settings -->
+              <RowDefinition Height="Auto"/>   <!-- resize grip -->
+            </Grid.RowDefinitions>
+
+            <!-- Whatever doesn't fit the current height scrolls, so no group is ever
+                 unreachable. Horizontal scrolling stays off so the content tracks width. -->
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
           <!-- Grouped into four labelled sections. Moving whole label+control blocks between
                groups is safe, but the ComboBoxItem order INSIDE each combo is load-bearing:
                the handlers cast SelectedIndex straight to the enum / size array. -->
-          <StackPanel Width="230">
+          <StackPanel Margin="0,0,6,0">
 
             <!-- ===== ANALYSIS: which part of the signal, at what resolution ===== -->
             <TextBlock Text="ANALYSIS" Style="{StaticResource SettingsSectionHeader}"/>
@@ -221,6 +256,12 @@
               <ComboBoxItem Content="Single view"/>
             </ComboBox>
           </StackPanel>
+            </ScrollViewer>
+
+            <Thumb x:Name="SettingsResizeGrip" Grid.Row="1" Style="{StaticResource SettingsResizeGrip}"
+                   DragDelta="SettingsResizeGrip_DragDelta"
+                   DragCompleted="SettingsResizeGrip_DragCompleted"/>
+          </Grid>
         </Border>
       </Popup>
     </Grid>
