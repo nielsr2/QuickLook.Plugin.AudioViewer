@@ -631,10 +631,22 @@ namespace QuickLook.Plugin.AudioViewer
             TimeAxis.Visibility = Visibility.Visible;
         }
 
-        // Keep the time ruler aligned under the spectrogram as the shared timeline scrolls.
+        // Keep the time ruler aligned under the spectrogram as the shared timeline scrolls,
+        // and mirror the scroll state onto the dedicated horizontal scrollbar below the plot.
         private void ViewScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
         {
             TimeRulerTranslate.X = -ViewScroll.HorizontalOffset;
+
+            double scrollable = ViewScroll.ScrollableWidth;
+            HScroll.Maximum = scrollable;
+            HScroll.ViewportSize = ViewScroll.ViewportWidth;
+            HScroll.Value = ViewScroll.HorizontalOffset;
+            HScroll.Visibility = scrollable > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void HScroll_Scroll(object sender, ScrollEventArgs e)
+        {
+            ViewScroll.ScrollToHorizontalOffset(e.NewValue);
         }
 
         /// <summary>Reconfigure and show/hide the frequency ruler and colorbar for the current state.</summary>

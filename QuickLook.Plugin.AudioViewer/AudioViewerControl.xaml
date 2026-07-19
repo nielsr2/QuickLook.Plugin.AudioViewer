@@ -19,34 +19,33 @@
     <SolidColorBrush x:Key="OverlayClose" Color="#FFCCCCCC"/>
     <SolidColorBrush x:Key="Playhead" Color="#FFFF5252"/>
   </UserControl.Resources>
-  <Grid Margin="12">
+  <!-- IsSharedSizeScope lets the seek bar and the horizontal scrollbar share the
+       spectrogram's left/right gutter widths (frequency ruler and colorbar), so they
+       line up horizontally with the waveform and spectrogram. -->
+  <Grid Margin="12" Grid.IsSharedSizeScope="True">
     <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>   <!-- 0: transport controls -->
+      <RowDefinition Height="Auto"/>   <!-- 1: playback timeline -->
+      <RowDefinition Height="*"/>       <!-- 2: waveform + spectrogram -->
+      <RowDefinition Height="Auto"/>   <!-- 3: horizontal scrollbar (below the plot) -->
+      <RowDefinition Height="Auto"/>   <!-- 4: single-view toggle -->
     </Grid.RowDefinitions>
 
-    <!-- Transport bar -->
+    <!-- Transport controls (the timeline is on its own row below) -->
     <Grid Grid.Row="0" Margin="0,0,0,8">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="Auto"/>   <!-- play -->
+        <ColumnDefinition Width="Auto"/>   <!-- time -->
+        <ColumnDefinition Width="*"/>       <!-- spacer -->
+        <ColumnDefinition Width="Auto"/>   <!-- mute + volume -->
+        <ColumnDefinition Width="Auto"/>   <!-- auto-play -->
+        <ColumnDefinition Width="Auto"/>   <!-- settings -->
       </Grid.ColumnDefinitions>
 
       <Button x:Name="PlayPauseButton" Grid.Column="0" Width="40" Height="28"
               Content="&#9654;" Click="PlayPauseButton_Click"/>
-      <Slider x:Name="SeekSlider" Grid.Column="1" Margin="8,0" VerticalAlignment="Center"
-              Minimum="0" Maximum="1" SmallChange="0.01" LargeChange="0.05"
-              IsMoveToPointEnabled="True"
-              Thumb.DragStarted="SeekSlider_DragStarted"
-              Thumb.DragCompleted="SeekSlider_DragCompleted"
-              ValueChanged="SeekSlider_ValueChanged"/>
-      <TextBlock x:Name="TimeText" Grid.Column="2" VerticalAlignment="Center"
-                 Foreground="{DynamicResource PrimaryText}" Margin="4,0" Text="00:00 / 00:00"/>
+      <TextBlock x:Name="TimeText" Grid.Column="1" VerticalAlignment="Center"
+                 Foreground="{DynamicResource PrimaryText}" Margin="10,0" Text="00:00 / 00:00"/>
       <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,0" VerticalAlignment="Center">
         <Button x:Name="MuteButton" Content="&#xE767;" FontFamily="Segoe MDL2 Assets" FontSize="14"
                 Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" Margin="0,0,5,0"
@@ -132,16 +131,32 @@
       </Popup>
     </Grid>
 
+    <!-- Playback timeline on its own row, aligned to the plot area via the shared
+         gutters so the seek position lines up with the waveform and spectrogram. -->
+    <Grid Grid.Row="1" Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="LeftGutter"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="RightGutter"/>
+      </Grid.ColumnDefinitions>
+      <Slider x:Name="SeekSlider" Grid.Column="1" VerticalAlignment="Center"
+              Minimum="0" Maximum="1" SmallChange="0.01" LargeChange="0.05"
+              IsMoveToPointEnabled="True"
+              Thumb.DragStarted="SeekSlider_DragStarted"
+              Thumb.DragCompleted="SeekSlider_DragCompleted"
+              ValueChanged="SeekSlider_ValueChanged"/>
+    </Grid>
+
     <!-- View pane. A horizontally-scrollable timeline holds the waveform (top,
          1*) and spectrogram (bottom, 4*) at the same width, so they stay aligned
          in time; long files render in full and scroll instead of truncating.
          Single-view layout collapses the wave row to 0 and toggles one view.
          Timeline width is set in code; MinWidth keeps short files filling the pane. -->
-    <Grid Grid.Row="1" x:Name="ViewPaneGrid">
+    <Grid Grid.Row="2" x:Name="ViewPaneGrid">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto"/>   <!-- frequency ruler -->
-        <ColumnDefinition Width="*"/>       <!-- content (scroll + overlays) -->
-        <ColumnDefinition Width="Auto"/>   <!-- colorbar legend -->
+        <ColumnDefinition Width="Auto" SharedSizeGroup="LeftGutter"/>   <!-- frequency ruler -->
+        <ColumnDefinition Width="*"/>                                    <!-- content (scroll + overlays) -->
+        <ColumnDefinition Width="Auto" SharedSizeGroup="RightGutter"/>  <!-- colorbar legend -->
       </Grid.ColumnDefinitions>
       <Grid.RowDefinitions>
         <RowDefinition Height="*"/>         <!-- views -->
@@ -155,7 +170,8 @@
 
       <!-- Content column: the scroll + overlays. Internals unchanged. -->
       <Grid x:Name="ContentGrid" Grid.Column="1" Grid.Row="0" ClipToBounds="True">
-        <ScrollViewer x:Name="ViewScroll" HorizontalScrollBarVisibility="Auto"
+        <!-- Built-in scrollbar hidden; a dedicated one sits below the time axis (HScroll). -->
+        <ScrollViewer x:Name="ViewScroll" HorizontalScrollBarVisibility="Hidden"
                       VerticalScrollBarVisibility="Disabled"
                       PreviewMouseWheel="ViewScroll_PreviewMouseWheel"
                       ScrollChanged="ViewScroll_ScrollChanged">
@@ -239,8 +255,20 @@
       </Grid>
     </Grid>
 
+    <!-- Horizontal scrollbar for long files, placed below the time axis (well clear
+         of the spectrogram) and aligned to the plot via the shared gutters. -->
+    <Grid Grid.Row="3">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="LeftGutter"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="RightGutter"/>
+      </Grid.ColumnDefinitions>
+      <ScrollBar x:Name="HScroll" Grid.Column="1" Orientation="Horizontal" Minimum="0"
+                 Margin="0,6,0,0" Visibility="Collapsed" Scroll="HScroll_Scroll"/>
+    </Grid>
+
     <!-- Toggle button -->
-    <Button x:Name="SpectrogramButton" Grid.Row="2" HorizontalAlignment="Right"
+    <Button x:Name="SpectrogramButton" Grid.Row="4" HorizontalAlignment="Right"
             Margin="0,8,0,0" Padding="10,4" Content="Spectrogram ▸"
             Click="SpectrogramButton_Click"/>
   </Grid>
