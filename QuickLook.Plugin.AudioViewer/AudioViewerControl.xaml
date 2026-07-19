@@ -87,6 +87,12 @@
               <ComboBoxItem Content="Draggable box"/>
             </ComboBox>
 
+            <TextBlock Text="Hover readout" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
+            <ComboBox x:Name="HoverModeCombo" Margin="0,0,0,8" SelectionChanged="HoverModeCombo_Changed">
+              <ComboBoxItem Content="MIDI note"/>
+              <ComboBoxItem Content="Frequency"/>
+            </ComboBox>
+
             <TextBlock Text="Layout" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
             <ComboBox x:Name="LayoutCombo" Margin="0,0,0,8" SelectionChanged="LayoutCombo_Changed">
               <ComboBoxItem Content="Stacked"/>

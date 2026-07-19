@@ -42,4 +42,13 @@ namespace QuickLook.Plugin.AudioViewer.Settings
         /// <summary>Full info box: draggable anywhere in the pane, with a ✕ to dismiss, remembers its position.</summary>
         DraggableBox
     }
+
+    /// <summary>What the middle term of the spectrogram hover readout shows.</summary>
+    public enum HoverReadoutMode
+    {
+        /// <summary>Nearest 12-TET note plus cents deviation, e.g. "E7 -14¢" (default).</summary>
+        MidiNote,
+        /// <summary>Raw cursor frequency, e.g. "2.5 kHz".</summary>
+        Frequency
+    }
 }

@@ -72,6 +72,13 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("FileInfoDisplay", value.ToString(), Domain);
         }
 
+        /// <summary>Spectrogram hover readout: nearest MIDI note (default) vs. raw frequency.</summary>
+        public static HoverReadoutMode HoverReadoutMode
+        {
+            get => ParseEnum("HoverReadoutMode", HoverReadoutMode.MidiNote);
+            set => SettingHelper.Set("HoverReadoutMode", value.ToString(), Domain);
+        }
+
         /// <summary>FFT window length (power of two): 512 / 1024 / 2048 / 4096.</summary>
         public static int FftSize
         {

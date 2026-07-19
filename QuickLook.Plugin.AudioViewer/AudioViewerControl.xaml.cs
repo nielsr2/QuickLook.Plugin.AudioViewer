@@ -119,6 +119,7 @@ namespace QuickLook.Plugin.AudioViewer
             _initializingSettings = true;
             FileInfoCheck.IsChecked = PluginSettings.ShowFileInfo;
             FileInfoStyleCombo.SelectedIndex = (int)PluginSettings.FileInfoDisplay;
+            HoverModeCombo.SelectedIndex = (int)PluginSettings.HoverReadoutMode;
             LayoutCombo.SelectedIndex = (int)PluginSettings.Layout;
             FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
             AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
@@ -358,6 +359,13 @@ namespace QuickLook.Plugin.AudioViewer
             if (_initializingSettings || FileInfoStyleCombo.SelectedIndex < 0) return;
             PluginSettings.FileInfoDisplay = (FileInfoDisplay)FileInfoStyleCombo.SelectedIndex;
             ApplyFileInfoMode();
+        }
+
+        private void HoverModeCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || HoverModeCombo.SelectedIndex < 0) return;
+            // No re-render needed: this only affects the next hover readout.
+            PluginSettings.HoverReadoutMode = (HoverReadoutMode)HoverModeCombo.SelectedIndex;
         }
 
         // True while the file-info overlay is in the unobtrusive hover-pill mode.
@@ -771,7 +779,10 @@ namespace QuickLook.Plugin.AudioViewer
                 ? $"{Math.Round(20.0 * Math.Log10(mag + 1e-12))} dB"
                 : mag.ToString("0.000");
 
-            HoverText.Text = $"{AxisTicks.FormatTime(time)}  ·  {AxisTicks.FormatHz(freq)}  ·  {level}";
+            string pitch = PluginSettings.HoverReadoutMode == HoverReadoutMode.MidiNote
+                ? MidiNote.Format(freq)
+                : AxisTicks.FormatHz(freq);
+            HoverText.Text = $"{AxisTicks.FormatTime(time)}  ·  {pitch}  ·  {level}";
 
             var pc = e.GetPosition(ContentGrid);
             HoverTranslate.X = Math.Min(pc.X + 12, ContentGrid.ActualWidth - HoverReadout.ActualWidth - 4);
