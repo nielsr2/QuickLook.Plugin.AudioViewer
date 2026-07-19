@@ -23,10 +23,13 @@ A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
 - **FFT size** — 512 / 1024 / 2048 / 4096 (time-vs-frequency resolution).
 - **Max frequency** — Full / 20 kHz / 10 kHz / 5 kHz.
 - **Contrast** — dB-floor slider.
-- **Show file info** — a bottom-right, draggable, closable overlay with embedded
-  tags (title, artist, album, year, genre) and cover art when present, plus the
-  file's format, decoder, sample rate, channels, bit depth, encoding, bitrate, and
-  duration.
+- **Hover readout** — MIDI note (default) or Frequency: what the cursor shows over the
+  spectrogram (time · nearest note or Hz · level).
+- **Show file info** — an overlay with embedded tags (title, artist, album, year,
+  genre) and cover art when present, plus the file's format, decoder, sample rate,
+  channels, bit depth, encoding, bitrate, and duration.
+- **File info style** — *Icon (hover)* (default): a small "info" pill in the corner
+  that reveals the box on hover; or *Draggable box*: a box you can drag and close.
 
 Display changes re-render instantly from cached FFT data; only an FFT-size change
 recomputes the transform.

@@ -12,7 +12,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Spectrogram axes: a frequency ruler (Linear/Log/Mel aware) and a time ruler that
   scrolls with the shared timeline.
 - Colorbar legend showing the active colormap and its dB / magnitude range.
-- Hover readout: time, frequency, and level under the cursor on the spectrogram.
+- Hover readout showing time, the nearest MIDI note (default) or frequency, and the
+  level under the cursor on the spectrogram, with a "Hover readout" setting to switch.
+- File-info overlay display modes: an unobtrusive hover "info" pill (default) or the
+  draggable box, via a "File info style" setting.
 - Light/dark theme awareness — the UI follows QuickLook's theme.
 - Click-to-seek on the waveform, and click-to-seek on the seek-bar track.
 - Keyboard shortcuts: `K` play/pause, `J`/`L` seek ±5 s, `M` mute, `+`/`-` volume.
@@ -20,6 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `THIRD-PARTY-NOTICES.md` bundling the licenses of the redistributed libraries.
 
 ### Changed
+- The playback timeline is on its own full-width row aligned with the plots, and the
+  horizontal scrollbar sits below the time axis instead of overlaying the spectrogram.
+- Dragging the playhead now scrubs the waveform, spectrogram, and time readout live,
+  not only on release.
 - High-quality bitmap scaling for a crisper spectrogram on high-DPI displays.
 - The DLL now carries the plugin version (previously `1.0.0.0`), single-sourced with
   the metadata config.
