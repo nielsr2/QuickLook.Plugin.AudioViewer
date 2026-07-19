@@ -63,6 +63,10 @@ namespace QuickLook.Plugin.AudioViewer
         private Point _infoDragStart;
         private double _infoStartX, _infoStartY;
 
+        // Hover-pill mode only: when the user clicks the pill, the info box is pinned
+        // open (stays visible when not hovering) until unpinned or closed via the ✕.
+        private bool _infoPinned;
+
         private static readonly int[] FftSizes = { 512, 1024, 2048, 4096 };
         private static readonly int[] MaxFreqs = { 0, 20000, 10000, 5000 };
 
@@ -375,10 +379,11 @@ namespace QuickLook.Plugin.AudioViewer
         private void ApplyFileInfoMode()
         {
             bool show = PluginSettings.ShowFileInfo;
+            _infoPinned = false; // reset pin state whenever the mode/visibility is (re)applied
             if (IsHoverInfoMode)
             {
                 // Unobtrusive pill; the box is revealed on hover (ShowHoverFileInfo) and
-                // auto-hides on mouse-leave. Not draggable, no ✕.
+                // auto-hides on mouse-leave. Not draggable; the ✕ is hidden until pinned.
                 InfoIcon.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
                 FileInfoClose.Visibility = Visibility.Collapsed;
                 FileInfoPanel.Cursor = Cursors.Arrow;
@@ -397,9 +402,8 @@ namespace QuickLook.Plugin.AudioViewer
 
         // Hover-pill mode: reveal the info box directly above the pill (both anchored
         // bottom-right, so a negative Y translate lifts the box to sit on top of it).
-        private void InfoIcon_MouseEnter(object sender, MouseEventArgs e)
+        private void ShowHoverFileInfo()
         {
-            if (!IsHoverInfoMode) return;
             FileInfoTranslate.X = 0;
             FileInfoPanel.Visibility = Visibility.Visible;
             FileInfoPanel.UpdateLayout(); // so InfoIcon.ActualHeight reflects the rendered pill
@@ -407,7 +411,33 @@ namespace QuickLook.Plugin.AudioViewer
             FileInfoTranslate.Y = -lift; // box bottom meets pill top (touching; no dead zone)
         }
 
+        private void InfoIcon_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (!IsHoverInfoMode) return;
+            ShowHoverFileInfo();
+        }
+
         private void InfoIcon_MouseLeave(object sender, MouseEventArgs e) => ScheduleHoverInfoHide();
+
+        // Clicking the pill toggles a pinned state so the box persists when not hovering.
+        private void InfoIcon_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (!IsHoverInfoMode) return;
+            e.Handled = true;
+            _infoPinned = !_infoPinned;
+            if (_infoPinned)
+            {
+                // Keep the box shown+positioned, and expose the ✕ so it can be closed.
+                ShowHoverFileInfo();
+                FileInfoClose.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                // Hide the ✕, then hide the box unless the pointer is still over pill/box.
+                FileInfoClose.Visibility = Visibility.Collapsed;
+                ScheduleHoverInfoHide();
+            }
+        }
 
         private void FileInfoPanel_MouseLeave(object sender, MouseEventArgs e)
         {
@@ -420,6 +450,7 @@ namespace QuickLook.Plugin.AudioViewer
         // by Background priority, IsMouseOver reflects wherever the pointer landed.
         private void ScheduleHoverInfoHide()
         {
+            if (_infoPinned) return; // pinned open: never auto-hide
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (!IsHoverInfoMode) return;
@@ -431,8 +462,16 @@ namespace QuickLook.Plugin.AudioViewer
         private void FileInfoClose_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true; // don't also start a drag
-            // Dismiss for this file only — leave the "Show file info" setting on, so a
-            // new file shows it again (unless the user unticks it in settings).
+            if (IsHoverInfoMode)
+            {
+                // Pinned hover box: unpin, hide the box, and hide the ✕ again.
+                _infoPinned = false;
+                FileInfoPanel.Visibility = Visibility.Collapsed;
+                FileInfoClose.Visibility = Visibility.Collapsed;
+                return;
+            }
+            // DraggableBox: dismiss for this file only — leave the "Show file info" setting
+            // on, so a new file shows it again (unless the user unticks it in settings).
             FileInfoPanel.Visibility = Visibility.Collapsed;
         }
 

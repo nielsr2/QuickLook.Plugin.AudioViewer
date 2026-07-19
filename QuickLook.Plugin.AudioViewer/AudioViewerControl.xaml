@@ -259,8 +259,9 @@
         <Border x:Name="InfoIcon" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                 Margin="0,0,10,10" Padding="7,3" CornerRadius="10" Background="{DynamicResource OverlayBackground}"
                 BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed"
-                Cursor="Hand" ToolTip="File info"
+                Cursor="Hand" ToolTip="Click to pin"
                 MouseEnter="InfoIcon_MouseEnter" MouseLeave="InfoIcon_MouseLeave"
+                MouseLeftButtonUp="InfoIcon_Click"
                 PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
           <StackPanel Orientation="Horizontal">
             <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="12"
