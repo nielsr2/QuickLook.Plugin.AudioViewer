@@ -10,11 +10,23 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AssemblyName>QuickLook.Plugin.AudioViewer</AssemblyName>
     <RootNamespace>QuickLook.Plugin.AudioViewer</RootNamespace>
+    <!-- Single-sourced from Directory.Build.props so the DLL version tracks the
+         plugin version instead of defaulting to 1.0.0.0. -->
+    <Version>$(PluginVersion)</Version>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Expose internals to the test project so decision/format helpers can stay
+         internal but remain unit-testable (no new public API surface). -->
+    <InternalsVisibleTo Include="QuickLook.Plugin.AudioViewer.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="NAudio.Vorbis" Version="1.5.0" />
+    <!-- Embedded-tag reading (artist/title/album/cover art). LGPL-2.1; shipped as a
+         separate unmodified DLL (dynamic linking). See THIRD-PARTY-NOTICES.md. -->
+    <PackageReference Include="TagLibSharp" Version="2.3.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -28,6 +40,11 @@
          and parses /Metadata/Version. It must be QuickLook.Plugin.Metadata.config
          (NOT *.Base.config, which is only upstream's version-stamping template). -->
     <None Update="QuickLook.Plugin.Metadata.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Ship the third-party license notices next to the redistributed DLLs.
+         pack-zip.ps1 globs bin\Release, so the file must land in the output dir. -->
+    <None Include="..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using NAudio.Wave;
 
 namespace QuickLook.Plugin.AudioViewer.Audio
@@ -19,7 +20,8 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             Max = max;
         }
 
-        public static WaveformData Compute(WaveStream stream, int columns = 2000)
+        public static WaveformData Compute(WaveStream stream, int columns = 2000,
+            CancellationToken token = default)
         {
             if (columns < 1) columns = 1;
 
@@ -48,6 +50,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
 
             while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
             {
+                token.ThrowIfCancellationRequested(); // abort promptly if the preview closed
                 anyData = true;
                 for (int i = 0; i + channels <= read; i += channels)
                 {

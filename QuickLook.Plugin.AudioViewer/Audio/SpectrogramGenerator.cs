@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using NAudio.Dsp;
@@ -24,6 +25,17 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         public double MaxFrequencyHz { get; set; } = 0;
     }
 
+    /// <summary>The amplitude-domain range a render normalized against, for the colorbar legend.</summary>
+    public struct SpectrogramLevels
+    {
+        /// <summary>Value mapped to the bottom (darkest) of the colormap.</summary>
+        public double Black;
+        /// <summary>Value mapped to the top (brightest) of the colormap.</summary>
+        public double Ceiling;
+        /// <summary>True if the values are in dB; otherwise linear magnitude.</summary>
+        public bool Decibel;
+    }
+
     /// <summary>
     /// Short-time Fourier transform of an audio signal, plus a colormapped bitmap
     /// renderer. <see cref="ComputeMagnitudes"/> returns raw <b>linear</b> magnitude
@@ -38,7 +50,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             => ComputeMagnitudes(source, 1024, 512, 4000, out capped);
 
         public static float[][] ComputeMagnitudes(ISampleProvider source, int fftSize,
-            int hop, int maxFrames, out bool capped)
+            int hop, int maxFrames, out bool capped, CancellationToken token = default)
         {
             capped = false;
             int channels = source.WaveFormat.Channels;
@@ -59,6 +71,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             // mono-mix into a sliding window; emit a frame every `hop` samples.
             while ((read = source.Read(readBuf, 0, readBuf.Length)) > 0)
             {
+                token.ThrowIfCancellationRequested(); // abort promptly if the preview closed
                 for (int i = 0; i + channels <= read; i += channels)
                 {
                     float mono = 0f;
@@ -114,11 +127,52 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             return mag;
         }
 
+        // Largest bitmap area we will allocate (pixels). PixelWidth is already bounded
+        // by the caller (<= MaxTimelineColumns) and PixelHeight is 512, so this ceiling
+        // is never hit in practice — it is a defensive guard against a pathological
+        // PixelWidth so we clamp instead of allocating our way into an OutOfMemoryException.
+        private const long MaxRenderPixels = 16_000_000;
+
         public static WriteableBitmap Render(float[][] linearFrames, SpectrogramRenderOptions o)
+            => Render(linearFrames, o, out _);
+
+        /// <summary>
+        /// Render and also report the amplitude-domain normalization used, so a colorbar
+        /// legend can label the same black/ceiling the image was scaled against.
+        /// </summary>
+        public static WriteableBitmap Render(float[][] linearFrames, SpectrogramRenderOptions o,
+            out SpectrogramLevels levels)
         {
-            int pw = Math.Max(1, o.PixelWidth);
-            int ph = Math.Max(1, o.PixelHeight);
+            byte[] pixels = RenderToPixels(linearFrames, o, out int pw, out int ph, out double black, out double ceiling);
+            levels = new SpectrogramLevels
+            {
+                Black = black,
+                Ceiling = ceiling,
+                Decibel = o.AmplitudeScale == AmplitudeScale.Decibel
+            };
             var bmp = new WriteableBitmap(pw, ph, 96, 96, PixelFormats.Bgra32, null);
+            bmp.WritePixels(new System.Windows.Int32Rect(0, 0, pw, ph), pixels, pw * 4, 0);
+            return bmp;
+        }
+
+        internal static byte[] RenderToPixels(float[][] linearFrames, SpectrogramRenderOptions o,
+            out int pw, out int ph)
+            => RenderToPixels(linearFrames, o, out pw, out ph, out _, out _);
+
+        /// <summary>
+        /// Colorize linear STFT frames into a BGRA32 pixel buffer. Pure (no WPF bitmap,
+        /// no threading), so the heavy path is unit-tested directly. <paramref name="pw"/>/
+        /// <paramref name="ph"/> return the (possibly clamped) output dimensions, and
+        /// <paramref name="black"/>/<paramref name="ceiling"/> the amplitude-domain range
+        /// the colors were normalized against (for the colorbar legend).
+        /// </summary>
+        internal static byte[] RenderToPixels(float[][] linearFrames, SpectrogramRenderOptions o,
+            out int pw, out int ph, out double black, out double ceiling)
+        {
+            pw = Math.Max(1, o.PixelWidth);
+            ph = Math.Max(1, o.PixelHeight);
+            if ((long)pw * ph > MaxRenderPixels)
+                pw = (int)Math.Max(1, MaxRenderPixels / ph);
             var pixels = new byte[pw * ph * 4];
 
             int frames = linearFrames?.Length ?? 0;
@@ -163,12 +217,12 @@ namespace QuickLook.Plugin.AudioViewer.Audio
 
             // Normalization: dB uses an absolute floor + adaptive ceiling (silence stays
             // dark, matching the original look); linear is peak-relative with a silence guard.
-            double black, range;
+            double range;
             if (db)
             {
-                double ceiling = Math.Max(maxVal, o.DbFloor + 1.0);
+                double dbCeiling = Math.Max(maxVal, o.DbFloor + 1.0);
                 black = o.DbFloor;
-                range = Math.Max(1.0, ceiling - black);
+                range = Math.Max(1.0, dbCeiling - black);
             }
             else if (maxVal < 1e-6)
             {
@@ -179,6 +233,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                 black = maxVal * Math.Pow(10.0, o.DbFloor / 20.0);
                 range = Math.Max(1e-12, maxVal - black);
             }
+            ceiling = black + range; // top of the color scale, in the amplitude domain
 
             // Pass 2: normalize + colorize. y=0 is the top => highest frequency.
             for (int x = 0; x < pw; x++)
@@ -198,8 +253,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                 }
             }
 
-            bmp.WritePixels(new System.Windows.Int32Rect(0, 0, pw, ph), pixels, pw * 4, 0);
-            return bmp;
+            return pixels;
         }
     }
 }

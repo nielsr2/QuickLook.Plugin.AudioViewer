@@ -16,10 +16,25 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         public AudioPlayer(WaveStream stream)
         {
             _stream = stream ?? throw new ArgumentNullException(nameof(stream));
-            _volume = new VolumeSampleProvider(_stream.ToSampleProvider()) { Volume = 1.0f };
-            _output = new WasapiOut(NAudio.CoreAudioApi.AudioClientShareMode.Shared, 100);
-            _output.Init(_volume);
-            _output.PlaybackStopped += (s, e) => PlaybackStopped?.Invoke(this, EventArgs.Empty);
+            try
+            {
+                _volume = new VolumeSampleProvider(_stream.ToSampleProvider()) { Volume = 1.0f };
+                _output = new WasapiOut(NAudio.CoreAudioApi.AudioClientShareMode.Shared, 100);
+                _output.Init(_volume);
+                _output.PlaybackStopped += (s, e) => PlaybackStopped?.Invoke(this, EventArgs.Empty);
+            }
+            catch
+            {
+                // Ownership rule: once this constructor is called it owns the stream.
+                // WasapiOut.Init can throw (e.g. an unsupported shared-mode format); on
+                // any failure dispose everything we created — including the stream — so
+                // the caller never leaks the file handle (a leaked handle keeps the file
+                // locked, blocking the user from deleting or moving it).
+                _output?.Dispose();
+                _output = null;
+                _stream.Dispose();
+                throw;
+            }
         }
 
         public TimeSpan Duration => _stream.TotalTime;
@@ -46,10 +61,13 @@ namespace QuickLook.Plugin.AudioViewer.Audio
 
         public void Seek(TimeSpan position)
         {
-            var clamped = position < TimeSpan.Zero ? TimeSpan.Zero
-                : position > _stream.TotalTime ? _stream.TotalTime : position;
-            _stream.CurrentTime = clamped;
+            _stream.CurrentTime = ClampSeek(position, _stream.TotalTime);
         }
+
+        /// <summary>Clamp a seek target into [0, total]. Pure, so it is unit-tested.</summary>
+        internal static TimeSpan ClampSeek(TimeSpan position, TimeSpan total)
+            => position < TimeSpan.Zero ? TimeSpan.Zero
+                : position > total ? total : position;
 
         public void Dispose()
         {

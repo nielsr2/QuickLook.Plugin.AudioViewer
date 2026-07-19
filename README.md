@@ -1,3 +1,5 @@
+<img src="assets/icon.svg" alt="AudioViewer icon" width="88" align="right"/>
+
 # QuickLook.Plugin.AudioViewer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -21,8 +23,10 @@ A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
 - **FFT size** — 512 / 1024 / 2048 / 4096 (time-vs-frequency resolution).
 - **Max frequency** — Full / 20 kHz / 10 kHz / 5 kHz.
 - **Contrast** — dB-floor slider.
-- **Show file info** — a top-left overlay with the file's format, decoder, sample
-  rate, channels, bit depth, encoding, bitrate, and duration.
+- **Show file info** — a bottom-right, draggable, closable overlay with embedded
+  tags (title, artist, album, year, genre) and cover art when present, plus the
+  file's format, decoder, sample rate, channels, bit depth, encoding, bitrate, and
+  duration.
 
 Display changes re-render instantly from cached FFT data; only an FFT-size change
 recomputes the transform.
@@ -30,6 +34,23 @@ recomputes the transform.
 Long files render in full: the waveform and spectrogram share one horizontally
 scrollable timeline (they stay aligned in time), and the view auto-follows the
 playhead during playback. Short files fill the pane with no scrollbar.
+
+The UI follows QuickLook's light/dark theme. Click the waveform (or the seek bar)
+to jump to a position.
+
+## Keyboard shortcuts
+
+When the preview has focus:
+
+| Key | Action |
+| --- | --- |
+| `K` | Play / pause |
+| `J` / `L` | Seek back / forward 5 s |
+| `M` | Mute / unmute |
+| `+` / `-` | Volume up / down |
+
+(Space and the arrow keys are intentionally left to QuickLook itself, which uses
+them to open/close previews and move between files.)
 
 ## Build
 
@@ -63,9 +84,10 @@ dotnet test tests/QuickLook.Plugin.AudioViewer.Tests
 
 ## Releases
 
-Pushing a version tag (e.g. `git tag v1.3 && git push origin v1.3`) runs the
+Pushing a version tag (e.g. `git tag v1.4.0 && git push origin v1.4.0`) runs the
 release workflow, which builds, packages the `.qlplugin`, and attaches it to a
-GitHub Release. CI builds and runs the tests on every push/PR.
+GitHub Release. CI builds and runs the tests on every push/PR. See
+[CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## License
 
@@ -73,6 +95,12 @@ GitHub Release. CI builds and runs the tests on every push/PR.
 
 ## Acknowledgements
 
-- [QuickLook](https://github.com/QL-Win/QuickLook) and QuickLook.Common — GPL-3.0.
-- [NAudio](https://github.com/naudio/NAudio) and
-  [NAudio.Vorbis](https://github.com/naudio/Vorbis) — MIT.
+- [QuickLook](https://github.com/QL-Win/QuickLook) — the host application (GPL-3.0).
+- [QuickLook.Common](https://github.com/QL-Win/QuickLook.Common) — the plugin API this
+  project builds against (MIT). Its assembly is supplied by the host at runtime, not
+  redistributed here.
+- [NAudio](https://github.com/naudio/NAudio),
+  [NAudio.Vorbis](https://github.com/naudio/Vorbis), and
+  [NVorbis](https://github.com/NVorbis/NVorbis) — MIT.
+
+Full third-party license texts are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

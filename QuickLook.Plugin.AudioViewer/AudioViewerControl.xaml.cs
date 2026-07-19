@@ -1,16 +1,20 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using NAudio.Wave;
 using QuickLook.Common.Plugin;
 using QuickLook.Plugin.AudioViewer.Audio;
+using QuickLook.Plugin.AudioViewer.Controls;
 using QuickLook.Plugin.AudioViewer.Settings;
+using QuickLook.Plugin.AudioViewer.Theming;
 
 namespace QuickLook.Plugin.AudioViewer
 {
@@ -24,6 +28,13 @@ namespace QuickLook.Plugin.AudioViewer
         private bool _showingSpectrogram;
         private bool _spectrogramBuilt;
 
+        // Lifecycle: the whole load runs async after the control is created, but the
+        // preview can be closed (Unload) mid-load. _cts cancels in-flight decode work
+        // and _unloaded guards every post-await UI continuation so we never touch a
+        // dead control or leak the audio player / file handle / timer.
+        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+        private bool _unloaded;
+
         // Cached linear STFT frames so setting changes re-render without re-running
         // the FFT; only an FFT-size change forces a recompute.
         private float[][] _spectrogramFrames;
@@ -32,6 +43,21 @@ namespace QuickLook.Plugin.AudioViewer
 
         private bool _initializingSettings;
         private int _renderGeneration;
+        // Set while Tick() writes SeekSlider.Value programmatically, so the resulting
+        // ValueChanged (used for track-click/keyboard seeking) doesn't feed back as a seek.
+        private bool _suppressSeekValueChanged;
+
+        // Mute state. The volume slider stays put while muted (showing the pre-mute level);
+        // any manual volume change unmutes.
+        private bool _muted;
+        private float _volumeBeforeMute = 0.8f;
+
+        // Axis state. _specTopFraction is where the spectrogram band starts vertically
+        // (0 single-view, 0.2 stacked); _lastLevels is the last render's normalization
+        // for the colorbar legend.
+        private double _specTopFraction;
+        private SpectrogramLevels _lastLevels;
+        private bool _isDark;
 
         private bool _infoDragging;
         private Point _infoDragStart;
@@ -60,9 +86,32 @@ namespace QuickLook.Plugin.AudioViewer
             InitializeComponent();
             _path = path;
             _context = context;
+            ApplyTheme();
             AutoPlayCheck.IsChecked = PluginSettings.AutoPlay;
             InitSettingsControls();
+            Waveform.SeekRequested += OnWaveformSeek; // click/drag on the waveform seeks
             Loaded += OnLoaded;
+        }
+
+        /// <summary>Resolve and apply the light/dark palette from QuickLook's theme.</summary>
+        private void ApplyTheme()
+        {
+            _isDark = ThemePalette.ResolveIsDark(_context?.Theme ?? Themes.None);
+            ThemePalette.Apply(Resources, _isDark);
+            Waveform.SetTheme(ThemePalette.WaveformWave(_isDark),
+                ThemePalette.Playhead(_isDark), ThemePalette.WaveformBackground(_isDark));
+
+            var axisText = ThemePalette.AxisText(_isDark);
+            var axisLine = ThemePalette.AxisLine(_isDark);
+            FreqRuler.SetTheme(axisText, axisLine);
+            TimeAxis.SetTheme(axisText, axisLine);
+            Colorbar.SetTheme(axisText);
+        }
+
+        private void OnWaveformSeek(double fraction)
+        {
+            if (_player == null || _scrubbing) return;
+            SeekTo(fraction);
         }
 
         private void InitSettingsControls()
@@ -82,27 +131,39 @@ namespace QuickLook.Plugin.AudioViewer
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             Loaded -= OnLoaded;
+            var token = _cts.Token;
+            WaveStream playbackStream = null;
+            bool playerCtorInvoked = false; // once true, AudioPlayer owns/disposes the stream
             try
             {
-                WaveStream playbackStream = null;
                 WaveformData waveform = null;
                 string infoText = null;
+                TagInfo tags = null;
 
                 await Task.Run(() =>
                 {
                     playbackStream = AudioReaderFactory.Create(_path);
                     infoText = BuildFileInfo(_path, playbackStream);
+                    tags = TagReader.Read(_path); // embedded metadata; null on none/failure
                     using (var scan = AudioReaderFactory.Create(_path))
-                        waveform = WaveformData.Compute(scan, TimelineColumns(scan.TotalTime.TotalSeconds));
-                });
+                        waveform = WaveformData.Compute(scan, TimelineColumns(scan.TotalTime.TotalSeconds), token);
+                }, token);
 
+                // Closed during the background decode: release the playback stream (else
+                // the file stays locked) and stop before touching the dead control.
+                if (_unloaded || token.IsCancellationRequested) { playbackStream?.Dispose(); return; }
+
+                // From here the constructor owns playbackStream: it disposes the stream
+                // itself on a failed WASAPI init, so OnLoaded must not also dispose it.
+                playerCtorInvoked = true;
                 _player = new AudioPlayer(playbackStream);
-                _player.PlaybackStopped += (s, a) => Dispatcher.Invoke(OnPlaybackStopped);
+                _player.PlaybackStopped += (s, a) => Dispatcher.BeginInvoke((Action)OnPlaybackStopped);
                 _player.Volume = (float)VolumeSlider.Value;
 
                 Waveform.Waveform = waveform;
                 SetTimelineWidth(_player.Duration.TotalSeconds);
-                FileInfoText.Text = infoText;
+                FileInfoText.Text = ComposeInfoText(tags, infoText);
+                SetAlbumArt(tags?.CoverArt);
                 FileInfoTranslate.X = PluginSettings.InfoPosX; // restore last dragged position
                 FileInfoTranslate.Y = PluginSettings.InfoPosY;
                 FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
@@ -118,14 +179,24 @@ namespace QuickLook.Plugin.AudioViewer
                 ApplyLayout(PluginSettings.Layout);
                 if (PluginSettings.Layout == LayoutMode.Stacked)
                     ShowSpectrogramAsync(false); // spectrogram is always visible when stacked
+
+                Focus(); // take keyboard focus so the media-key shortcuts work without a click
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelled mid-decode (preview closed): the reader may already be open, so
+                // release it here — the constructor hadn't taken ownership yet.
+                if (!playerCtorInvoked) playbackStream?.Dispose();
             }
             catch (AudioFormatException ex)
             {
-                ShowError(ex.Message);
+                if (!playerCtorInvoked) playbackStream?.Dispose();
+                if (!_unloaded) ShowError(ex.Message);
             }
             catch (Exception ex)
             {
-                ShowError("Could not play this audio file. " + ex.Message);
+                if (!playerCtorInvoked) playbackStream?.Dispose();
+                if (!_unloaded) ShowError("Could not play this audio file. " + ex.Message);
             }
         }
 
@@ -144,7 +215,9 @@ namespace QuickLook.Plugin.AudioViewer
             double dur = _player.Duration.TotalSeconds;
             double pos = _player.Position.TotalSeconds;
             double frac = dur > 0 ? Math.Min(1.0, pos / dur) : 0;
-            SeekSlider.Value = frac;
+            _suppressSeekValueChanged = true;
+            SeekSlider.Value = frac; // programmatic: don't let ValueChanged re-seek
+            _suppressSeekValueChanged = false;
             Waveform.PlayheadFraction = frac;
             UpdateSpectrogramPlayhead(frac);
             UpdateTimeText();
@@ -156,7 +229,10 @@ namespace QuickLook.Plugin.AudioViewer
             TimeText.Text = $"{Fmt(_player.Position)} / {Fmt(_player.Duration)}";
         }
 
-        private static string Fmt(TimeSpan t) => $"{(int)t.TotalMinutes:00}:{t.Seconds:00}";
+        // Show hours only when the duration needs them; otherwise stay mm:ss.
+        internal static string Fmt(TimeSpan t) => t.TotalHours >= 1
+            ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}"
+            : $"{(int)t.TotalMinutes:00}:{t.Seconds:00}";
 
         private void PlayPauseButton_Click(object sender, RoutedEventArgs e) => TogglePlay(!_player?.IsPlaying ?? false);
 
@@ -169,8 +245,9 @@ namespace QuickLook.Plugin.AudioViewer
 
         private void OnPlaybackStopped()
         {
+            if (_unloaded || _player == null) return; // event can arrive during teardown
             // reached end (or stopped): reset button glyph
-            if (_player != null && _player.Position >= _player.Duration - TimeSpan.FromMilliseconds(100))
+            if (_player.Position >= _player.Duration - TimeSpan.FromMilliseconds(100))
                 PlayPauseButton.Content = "▶";
         }
 
@@ -180,6 +257,15 @@ namespace QuickLook.Plugin.AudioViewer
         {
             _scrubbing = false;
             SeekTo(SeekSlider.Value);
+        }
+
+        // Fires for track-clicks and keyboard changes (IsMoveToPointEnabled). Thumb-drags
+        // are handled by DragStarted/DragCompleted (_scrubbing), and Tick()'s programmatic
+        // writes are suppressed, so this only seeks on genuine user value changes.
+        private void SeekSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_suppressSeekValueChanged || _scrubbing || _player == null) return;
+            SeekTo(e.NewValue);
         }
 
         private void SeekTo(double fraction)
@@ -194,7 +280,64 @@ namespace QuickLook.Plugin.AudioViewer
 
         private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
+            if (_muted) { _muted = false; UpdateMuteGlyph(); } // any manual change unmutes
             if (_player != null) _player.Volume = (float)e.NewValue;
+        }
+
+        private void MuteButton_Click(object sender, RoutedEventArgs e) => ToggleMute();
+
+        private void ToggleMute()
+        {
+            if (_player == null) return;
+            _muted = !_muted;
+            if (_muted)
+            {
+                _volumeBeforeMute = (float)VolumeSlider.Value;
+                _player.Volume = 0f; // leave the slider where it is
+            }
+            else
+            {
+                _player.Volume = _volumeBeforeMute;
+            }
+            UpdateMuteGlyph();
+        }
+
+        private void UpdateMuteGlyph()
+        {
+            // Segoe MDL2: E767 = speaker, E74F = muted speaker.
+            MuteButton.Content = _muted ? "" : "";
+        }
+
+        private void AdjustVolume(double delta)
+        {
+            double v = Math.Min(1.0, Math.Max(0.0, VolumeSlider.Value + delta));
+            VolumeSlider.Value = v; // ValueChanged applies it to the player and unmutes
+        }
+
+        private void SeekRelative(double seconds)
+        {
+            if (_player == null || _player.Duration.TotalSeconds <= 0) return;
+            double frac = (_player.Position.TotalSeconds + seconds) / _player.Duration.TotalSeconds;
+            SeekTo(Math.Min(1.0, Math.Max(0.0, frac)));
+        }
+
+        // Media-player keys chosen to NOT collide with QuickLook host gestures (Space
+        // toggles the preview; arrow keys navigate files in Explorer). Unhandled keys
+        // bubble up to the host untouched.
+        private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (_player == null) return;
+            switch (e.Key)
+            {
+                case Key.K: TogglePlay(!_player.IsPlaying); e.Handled = true; break;
+                case Key.J: SeekRelative(-5); e.Handled = true; break;
+                case Key.L: SeekRelative(5); e.Handled = true; break;
+                case Key.M: ToggleMute(); e.Handled = true; break;
+                case Key.OemPlus:
+                case Key.Add: AdjustVolume(0.05); e.Handled = true; break;
+                case Key.OemMinus:
+                case Key.Subtract: AdjustVolume(-0.05); e.Handled = true; break;
+            }
         }
 
         private void AutoPlayCheck_Changed(object sender, RoutedEventArgs e)
@@ -319,6 +462,7 @@ namespace QuickLook.Plugin.AudioViewer
             SpectrogramImage.Visibility = _showingSpectrogram ? Visibility.Visible : Visibility.Collapsed;
             SpectrogramButton.Content = _showingSpectrogram ? "◂ Waveform" : "Spectrogram ▸";
             UpdateSpectrogramPlayheadVisibility();
+            RefreshAxes();
         }
 
         /// <summary>Arrange the waveform/spectrogram panes for the given layout mode.</summary>
@@ -333,6 +477,7 @@ namespace QuickLook.Plugin.AudioViewer
                 SpectrogramImage.Visibility = Visibility.Visible;
                 SpectrogramButton.Visibility = Visibility.Collapsed;
                 _showingSpectrogram = true;
+                _specTopFraction = 1.0 / 5.0; // spectrogram is the lower 4/5
             }
             else // Single view
             {
@@ -344,8 +489,10 @@ namespace QuickLook.Plugin.AudioViewer
                 Waveform.Visibility = Visibility.Visible;
                 SpectrogramImage.Visibility = Visibility.Collapsed;
                 SpectrogramButton.Content = "Spectrogram ▸";
+                _specTopFraction = 0.0; // spectrogram fills the pane
             }
             UpdateSpectrogramPlayheadVisibility();
+            RefreshAxes();
         }
 
         /// <summary>Ensure linear STFT frames are cached (recomputing on FFT-size change), then render.</summary>
@@ -356,6 +503,7 @@ namespace QuickLook.Plugin.AudioViewer
 
             if (needCompute)
             {
+                var token = _cts.Token;
                 StatusText.Text = "Generating spectrogram…";
                 StatusText.Visibility = Visibility.Visible;
                 SpectrogramButton.IsEnabled = false;
@@ -379,17 +527,24 @@ namespace QuickLook.Plugin.AudioViewer
                                 ? Math.Max(fftSize / 4, (int)(audioFrames / Math.Max(1, targetCols)))
                                 : fftSize / 2;
                             frames = SpectrogramGenerator.ComputeMagnitudes(stream.ToSampleProvider(),
-                                fftSize, hop, MaxTimelineColumns + 16, out capped);
+                                fftSize, hop, MaxTimelineColumns + 16, out capped, token);
                         }
-                    });
+                    }, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return; // preview closed mid-compute
                 }
                 catch (Exception ex)
                 {
+                    if (_unloaded) return;
                     StatusText.Text = "Could not build spectrogram. " + ex.Message;
                     StatusText.Visibility = Visibility.Visible;
                     SpectrogramButton.IsEnabled = true;
                     return;
                 }
+
+                if (_unloaded || token.IsCancellationRequested) return;
 
                 _spectrogramFrames = frames;
                 _spectrogramSampleRate = sr;
@@ -406,6 +561,19 @@ namespace QuickLook.Plugin.AudioViewer
             var frames = _spectrogramFrames;
             if (frames == null) return;
 
+            // Files shorter than one FFT window yield zero frames; rendering that would
+            // just paint a black rectangle. Tell the user instead and keep the waveform.
+            if (frames.Length == 0)
+            {
+                _spectrogramBuilt = false;
+                SpectrogramImage.Source = null;
+                UpdateSpectrogramPlayheadVisibility();
+                StatusText.Text = $"File too short for a spectrogram at FFT size {PluginSettings.FftSize}. " +
+                                  "Try a smaller FFT size.";
+                StatusText.Visibility = Visibility.Visible;
+                return;
+            }
+
             int gen = ++_renderGeneration;
             var opts = new SpectrogramRenderOptions
             {
@@ -420,19 +588,33 @@ namespace QuickLook.Plugin.AudioViewer
                 MaxFrequencyHz = PluginSettings.MaxFrequencyHz
             };
 
-            System.Windows.Media.Imaging.WriteableBitmap bmp = null;
-            await Task.Run(() =>
+            try
             {
-                bmp = SpectrogramGenerator.Render(frames, opts);
-                bmp.Freeze();
-            });
+                System.Windows.Media.Imaging.WriteableBitmap bmp = null;
+                SpectrogramLevels levels = default;
+                await Task.Run(() =>
+                {
+                    bmp = SpectrogramGenerator.Render(frames, opts, out levels);
+                    bmp.Freeze();
+                });
 
-            if (gen != _renderGeneration) return; // a newer render superseded this one
+                if (_unloaded || gen != _renderGeneration) return; // superseded or torn down
 
-            SpectrogramImage.Source = bmp;
-            _spectrogramBuilt = true;
-            StatusText.Visibility = Visibility.Collapsed; // whole file is rendered; no truncation note
-            UpdateSpectrogramPlayheadVisibility();
+                SpectrogramImage.Source = bmp;
+                _spectrogramBuilt = true;
+                _lastLevels = levels;
+                StatusText.Visibility = Visibility.Collapsed; // whole file is rendered; no truncation note
+                UpdateSpectrogramPlayheadVisibility();
+                RefreshAxes();
+            }
+            catch (Exception ex)
+            {
+                // async void on the UI thread: an unobserved throw here (e.g. an allocation
+                // failure on a very wide bitmap) could tear down the QuickLook host. Contain it.
+                if (_unloaded || gen != _renderGeneration) return;
+                StatusText.Text = "Could not render spectrogram. " + ex.Message;
+                StatusText.Visibility = Visibility.Visible;
+            }
         }
 
         /// <summary>Set the scrollable timeline width from the file duration.</summary>
@@ -442,7 +624,84 @@ namespace QuickLook.Plugin.AudioViewer
             if (w > MaxTimelineColumns) w = MaxTimelineColumns;
             if (w < 1) w = 1;
             Timeline.Width = w; // MinWidth binding keeps short files filling the pane
+
+            // TimeAxis.Width is bound to Timeline.ActualWidth in XAML, so it matches the
+            // stretched width for short files too; here we only supply the duration.
+            TimeAxis.Configure(seconds);
+            TimeAxis.Visibility = Visibility.Visible;
         }
+
+        // Keep the time ruler aligned under the spectrogram as the shared timeline scrolls.
+        private void ViewScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            TimeRulerTranslate.X = -ViewScroll.HorizontalOffset;
+        }
+
+        /// <summary>Reconfigure and show/hide the frequency ruler and colorbar for the current state.</summary>
+        private void RefreshAxes()
+        {
+            bool show = _spectrogramBuilt && _spectrogramFrames != null && _spectrogramFrames.Length > 0
+                        && SpectrogramImage.Visibility == Visibility.Visible;
+            if (!show)
+            {
+                FreqRuler.Visibility = Visibility.Collapsed;
+                Colorbar.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var scale = PluginSettings.FreqScale;
+            double fMin = FrequencyScaleMapper.EffectiveFMin(scale, _spectrogramFftSize, _spectrogramSampleRate);
+            double fMax = FrequencyScaleMapper.EffectiveFMax(_spectrogramSampleRate, PluginSettings.MaxFrequencyHz);
+            FreqRuler.Configure(scale, fMin, fMax, _specTopFraction);
+            Colorbar.Configure(PluginSettings.Colormap, _lastLevels, _specTopFraction);
+            FreqRuler.Visibility = Visibility.Visible;
+            Colorbar.Visibility = Visibility.Visible;
+        }
+
+        private void SpectrogramImage_MouseMove(object sender, MouseEventArgs e)
+        {
+            var frames = _spectrogramFrames;
+            if (!_spectrogramBuilt || frames == null || frames.Length == 0 || _player == null)
+            {
+                HoverReadout.Visibility = Visibility.Collapsed;
+                return;
+            }
+            double w = SpectrogramImage.ActualWidth, h = SpectrogramImage.ActualHeight;
+            if (w <= 0 || h <= 0) return;
+
+            var p = e.GetPosition(SpectrogramImage);
+            double tx = Clamp01(p.X / w);
+            double u = Clamp01(1.0 - p.Y / h); // y=0 (top) is the highest frequency
+
+            double time = tx * _player.Duration.TotalSeconds;
+            var scale = PluginSettings.FreqScale;
+            double fMin = FrequencyScaleMapper.EffectiveFMin(scale, _spectrogramFftSize, _spectrogramSampleRate);
+            double fMax = FrequencyScaleMapper.EffectiveFMax(_spectrogramSampleRate, PluginSettings.MaxFrequencyHz);
+            double freq = FrequencyScaleMapper.FractionToFrequency(u, scale, fMin, fMax);
+
+            int fi = (int)(tx * (frames.Length - 1));
+            if (fi < 0) fi = 0; else if (fi > frames.Length - 1) fi = frames.Length - 1;
+            var frame = frames[fi];
+            double hzPerBin = (double)_spectrogramSampleRate / _spectrogramFftSize;
+            int bin = (int)(freq / hzPerBin);
+            if (bin < 0) bin = 0; else if (bin > frame.Length - 1) bin = frame.Length - 1;
+            double mag = frame[bin];
+            string level = PluginSettings.AmpScale == AmplitudeScale.Decibel
+                ? $"{Math.Round(20.0 * Math.Log10(mag + 1e-12))} dB"
+                : mag.ToString("0.000");
+
+            HoverText.Text = $"{AxisTicks.FormatTime(time)}  ·  {AxisTicks.FormatHz(freq)}  ·  {level}";
+
+            var pc = e.GetPosition(ContentGrid);
+            HoverTranslate.X = Math.Min(pc.X + 12, ContentGrid.ActualWidth - HoverReadout.ActualWidth - 4);
+            HoverTranslate.Y = Math.Min(pc.Y + 12, ContentGrid.ActualHeight - HoverReadout.ActualHeight - 4);
+            HoverReadout.Visibility = Visibility.Visible;
+        }
+
+        private void SpectrogramImage_MouseLeave(object sender, MouseEventArgs e)
+            => HoverReadout.Visibility = Visibility.Collapsed;
+
+        private static double Clamp01(double v) => v < 0 ? 0 : v > 1 ? 1 : v;
 
         private void UpdateSpectrogramPlayhead(double frac)
         {
@@ -473,8 +732,56 @@ namespace QuickLook.Plugin.AudioViewer
                     ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        /// <summary>Prepend a block of embedded tags (if any) above the technical info.</summary>
+        internal static string ComposeInfoText(TagInfo tags, string technical)
+        {
+            if (tags == null || !tags.HasText) return technical;
+
+            var sb = new StringBuilder();
+            void L(string k, string v)
+            {
+                if (!string.IsNullOrWhiteSpace(v)) sb.AppendLine(k.PadRight(13) + v);
+            }
+            L("Title", tags.Title);
+            L("Artist", tags.Artist);
+            L("Album", tags.Album);
+            if (tags.Year > 0) L("Year", tags.Year.ToString());
+            L("Genre", tags.Genre);
+            sb.AppendLine(); // blank line between tags and the technical block
+            sb.Append(technical);
+            return sb.ToString();
+        }
+
+        /// <summary>Decode cover-art bytes to a frozen bitmap and show it, or hide the image.</summary>
+        private void SetAlbumArt(byte[] data)
+        {
+            if (data == null || data.Length == 0)
+            {
+                AlbumArt.Source = null;
+                AlbumArt.Visibility = Visibility.Collapsed;
+                return;
+            }
+            try
+            {
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad; // read fully now; don't hold the stream
+                bmp.DecodePixelWidth = 128;                 // cap memory for large embedded art
+                bmp.StreamSource = new MemoryStream(data);
+                bmp.EndInit();
+                bmp.Freeze();
+                AlbumArt.Source = bmp;
+                AlbumArt.Visibility = Visibility.Visible;
+            }
+            catch
+            {
+                AlbumArt.Source = null;
+                AlbumArt.Visibility = Visibility.Collapsed; // unreadable art: just hide it
+            }
+        }
+
         /// <summary>Gather a human-readable summary of the audio file for the info overlay.</summary>
-        private static string BuildFileInfo(string path, WaveStream stream)
+        internal static string BuildFileInfo(string path, WaveStream stream)
         {
             var fi = new FileInfo(path);
             var wf = stream.WaveFormat;
@@ -518,9 +825,12 @@ namespace QuickLook.Plugin.AudioViewer
 
         public void Unload()
         {
+            _unloaded = true;   // stop every in-flight async continuation from touching the control
+            _cts.Cancel();      // abort in-flight decode/FFT so it doesn't run on a dead control
             _timer?.Stop();
-            _player?.Dispose();
+            _player?.Dispose(); // disposes the WASAPI output and releases the file handle
             _player = null;
+            _cts.Dispose();
         }
     }
 }

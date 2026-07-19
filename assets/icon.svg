@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="QuickLook AudioViewer icon">
+  <defs>
+    <linearGradient id="magma" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#000004"/>
+      <stop offset="0.35" stop-color="#6b116f"/>
+      <stop offset="0.65" stop-color="#e3611e"/>
+      <stop offset="1" stop-color="#fcfdbf"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Badge -->
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#1e1e1e"/>
+  <rect x="4.5" y="4.5" width="119" height="119" rx="25.5" fill="none" stroke="#3a3a3a" stroke-width="1"/>
+
+  <!-- Spectrogram columns -->
+  <g fill="url(#magma)">
+    <rect x="26" y="44" width="8" height="52" rx="2"/>
+    <rect x="40" y="30" width="8" height="66" rx="2"/>
+    <rect x="54" y="52" width="8" height="44" rx="2"/>
+    <rect x="68" y="24" width="8" height="72" rx="2"/>
+    <rect x="82" y="40" width="8" height="56" rx="2"/>
+    <rect x="96" y="58" width="8" height="38" rx="2"/>
+  </g>
+
+  <!-- Waveform overlay -->
+  <path d="M18 78 Q30 58 40 78 T62 78 Q74 54 84 78 T110 78"
+        fill="none" stroke="#4fc3f7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+</svg>
