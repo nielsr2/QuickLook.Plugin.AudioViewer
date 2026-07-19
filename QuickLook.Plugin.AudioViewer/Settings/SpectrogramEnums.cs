@@ -48,11 +48,17 @@ namespace QuickLook.Plugin.AudioViewer.Settings
     }
 
     /// <summary>What the middle term of the spectrogram hover readout shows.</summary>
+    /// <remarks>
+    /// Members are appended, never reordered: the settings combo casts its SelectedIndex
+    /// straight to this enum, so the XAML item order must stay in lockstep.
+    /// </remarks>
     public enum HoverReadoutMode
     {
-        /// <summary>Nearest 12-TET note plus cents deviation, e.g. "E7 -14¢" (default).</summary>
+        /// <summary>Nearest 12-TET note plus cents deviation, e.g. "E7 -14¢".</summary>
         MidiNote,
         /// <summary>Raw cursor frequency, e.g. "2.5 kHz".</summary>
-        Frequency
+        Frequency,
+        /// <summary>Both terms, e.g. "A4 +2¢  ·  440 Hz" (default).</summary>
+        Both
     }
 }

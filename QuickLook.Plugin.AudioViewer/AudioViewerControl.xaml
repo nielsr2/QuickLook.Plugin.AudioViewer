@@ -43,6 +43,29 @@
         </Setter.Value>
       </Setter>
     </Style>
+
+    <!-- Settings popup: section eyebrow, field label and group divider. Keyed (not
+         implicit) so they can't leak into the transport bar or bleed into control
+         templates, and DynamicResource throughout so ThemePalette.Apply re-themes them. -->
+    <Style x:Key="SettingsSectionHeader" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,0,0,6"/>
+    </Style>
+
+    <Style x:Key="SettingsFieldLabel" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
+      <Setter Property="Margin" Value="0,0,0,2"/>
+    </Style>
+
+    <Style x:Key="SettingsSeparator" TargetType="Border">
+      <Setter Property="Height" Value="1"/>
+      <Setter Property="Background" Value="{DynamicResource PopupBorder}"/>
+      <Setter Property="Opacity" Value="0.6"/>
+      <Setter Property="Margin" Value="0,12,0,12"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
   </UserControl.Resources>
   <!-- IsSharedSizeScope lets the seek bar and the horizontal scrollbar share the
        spectrogram's left/right gutter widths (frequency ruler and colorbar), so they
@@ -102,46 +125,56 @@
           <Border.Effect>
             <DropShadowEffect Color="#000000" BlurRadius="10" ShadowDepth="2" Opacity="0.5"/>
           </Border.Effect>
-          <StackPanel Width="180">
-            <CheckBox x:Name="FileInfoCheck" Content="Show file info" Foreground="{DynamicResource PrimaryText}"
-                      Margin="0,0,0,10" Checked="FileInfoCheck_Changed" Unchecked="FileInfoCheck_Changed"/>
+          <!-- Grouped into four labelled sections. Moving whole label+control blocks between
+               groups is safe, but the ComboBoxItem order INSIDE each combo is load-bearing:
+               the handlers cast SelectedIndex straight to the enum / size array. -->
+          <StackPanel Width="230">
 
-            <TextBlock Text="File info style" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
-            <ComboBox x:Name="FileInfoStyleCombo" Margin="0,0,0,8" SelectionChanged="FileInfoStyleCombo_Changed">
-              <ComboBoxItem Content="Icon (hover)"/>
-              <ComboBoxItem Content="Draggable box"/>
-            </ComboBox>
+            <!-- ===== ANALYSIS: which part of the signal, at what resolution ===== -->
+            <TextBlock Text="ANALYSIS" Style="{StaticResource SettingsSectionHeader}"/>
 
-            <TextBlock Text="Hover readout" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
-            <ComboBox x:Name="HoverModeCombo" Margin="0,0,0,8" SelectionChanged="HoverModeCombo_Changed">
-              <ComboBoxItem Content="MIDI note"/>
-              <ComboBoxItem Content="Frequency"/>
-            </ComboBox>
-
-            <CheckBox x:Name="NoteLayerCheck" Content="Note layer" Foreground="{DynamicResource PrimaryText}"
-                      Margin="0,0,0,10" Checked="NoteLayerCheck_Changed" Unchecked="NoteLayerCheck_Changed"
-                      ToolTip="Draw, edit and export MIDI notes over the spectrogram"/>
-
-            <TextBlock Text="Layout" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
-            <ComboBox x:Name="LayoutCombo" Margin="0,0,0,8" SelectionChanged="LayoutCombo_Changed">
-              <ComboBoxItem Content="Stacked"/>
-              <ComboBoxItem Content="Single view"/>
-            </ComboBox>
-
-            <TextBlock Text="Frequency scale" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
+            <TextBlock Text="Frequency scale" Style="{StaticResource SettingsFieldLabel}"/>
             <ComboBox x:Name="FreqCombo" Margin="0,0,0,8" SelectionChanged="FreqCombo_Changed">
               <ComboBoxItem Content="Linear"/>
               <ComboBoxItem Content="Log"/>
               <ComboBoxItem Content="Mel"/>
             </ComboBox>
 
-            <TextBlock Text="Amplitude" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
+            <TextBlock Text="Max frequency" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="MaxFreqCombo" Margin="0,0,0,8" SelectionChanged="MaxFreqCombo_Changed">
+              <ComboBoxItem Content="Full"/>
+              <ComboBoxItem Content="20 kHz"/>
+              <ComboBoxItem Content="10 kHz"/>
+              <ComboBoxItem Content="5 kHz"/>
+            </ComboBox>
+
+            <TextBlock Text="FFT size" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="FftCombo" SelectionChanged="FftCombo_Changed">
+              <ComboBoxItem Content="512"/>
+              <ComboBoxItem Content="1024"/>
+              <ComboBoxItem Content="2048"/>
+              <ComboBoxItem Content="4096"/>
+            </ComboBox>
+
+            <!-- ===== APPEARANCE: how magnitude maps to colour ===== -->
+            <Border Style="{StaticResource SettingsSeparator}"/>
+            <TextBlock Text="APPEARANCE" Style="{StaticResource SettingsSectionHeader}"/>
+
+            <TextBlock Text="Amplitude" Style="{StaticResource SettingsFieldLabel}"/>
             <ComboBox x:Name="AmpCombo" Margin="0,0,0,8" SelectionChanged="AmpCombo_Changed">
               <ComboBoxItem Content="Decibel (dB)"/>
               <ComboBoxItem Content="Linear"/>
             </ComboBox>
 
-            <TextBlock Text="Colormap" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
+            <TextBlock Text="Contrast (dB floor)" Style="{StaticResource SettingsFieldLabel}"/>
+            <Slider x:Name="ContrastSlider" Margin="0,0,0,8" Minimum="-120" Maximum="-40"
+                    SmallChange="1" LargeChange="10" ValueChanged="ContrastSlider_Changed"/>
+
+            <TextBlock Text="Gamma (detail)" Style="{StaticResource SettingsFieldLabel}"/>
+            <Slider x:Name="GammaSlider" Margin="0,0,0,8" Minimum="0.3" Maximum="2.0"
+                    SmallChange="0.05" LargeChange="0.25" ValueChanged="GammaSlider_Changed"/>
+
+            <TextBlock Text="Colormap" Style="{StaticResource SettingsFieldLabel}"/>
             <ComboBox x:Name="ColorCombo" Margin="0,0,0,8" SelectionChanged="ColorCombo_Changed">
               <ComboBoxItem Content="Magma"/>
               <ComboBoxItem Content="Viridis"/>
@@ -153,31 +186,40 @@
             </ComboBox>
 
             <CheckBox x:Name="ReverseCheck" Content="Reverse colormap" Foreground="{DynamicResource PrimaryText}"
-                      Margin="0,0,0,8" Checked="ReverseCheck_Changed" Unchecked="ReverseCheck_Changed"/>
+                      Checked="ReverseCheck_Changed" Unchecked="ReverseCheck_Changed"/>
 
-            <TextBlock Text="Gamma (detail)" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
-            <Slider x:Name="GammaSlider" Margin="0,0,0,8" Minimum="0.3" Maximum="2.0"
-                    SmallChange="0.05" LargeChange="0.25" ValueChanged="GammaSlider_Changed"/>
+            <!-- ===== OVERLAYS: what is drawn on top, and the cursor readout ===== -->
+            <Border Style="{StaticResource SettingsSeparator}"/>
+            <TextBlock Text="OVERLAYS" Style="{StaticResource SettingsSectionHeader}"/>
 
-            <TextBlock Text="FFT size" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
-            <ComboBox x:Name="FftCombo" Margin="0,0,0,8" SelectionChanged="FftCombo_Changed">
-              <ComboBoxItem Content="512"/>
-              <ComboBoxItem Content="1024"/>
-              <ComboBoxItem Content="2048"/>
-              <ComboBoxItem Content="4096"/>
+            <CheckBox x:Name="NoteLayerCheck" Content="Note layer" Foreground="{DynamicResource PrimaryText}"
+                      Margin="0,0,0,8" Checked="NoteLayerCheck_Changed" Unchecked="NoteLayerCheck_Changed"
+                      ToolTip="Draw, edit and export MIDI notes over the spectrogram"/>
+
+            <TextBlock Text="Hover readout" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="HoverModeCombo" Margin="0,0,0,8" SelectionChanged="HoverModeCombo_Changed">
+              <ComboBoxItem Content="MIDI note"/>
+              <ComboBoxItem Content="Frequency"/>
+              <ComboBoxItem Content="Note + frequency"/>
             </ComboBox>
 
-            <TextBlock Text="Max frequency" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
-            <ComboBox x:Name="MaxFreqCombo" Margin="0,0,0,8" SelectionChanged="MaxFreqCombo_Changed">
-              <ComboBoxItem Content="Full"/>
-              <ComboBoxItem Content="20 kHz"/>
-              <ComboBoxItem Content="10 kHz"/>
-              <ComboBoxItem Content="5 kHz"/>
+            <CheckBox x:Name="FileInfoCheck" Content="Show file info" Foreground="{DynamicResource PrimaryText}"
+                      Margin="0,0,0,8" Checked="FileInfoCheck_Changed" Unchecked="FileInfoCheck_Changed"/>
+
+            <TextBlock Text="File info style" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="FileInfoStyleCombo" SelectionChanged="FileInfoStyleCombo_Changed">
+              <ComboBoxItem Content="Icon (hover)"/>
+              <ComboBoxItem Content="Draggable box"/>
             </ComboBox>
 
-            <TextBlock Text="Contrast (dB floor)" Foreground="{DynamicResource SecondaryText}" Margin="0,0,0,2"/>
-            <Slider x:Name="ContrastSlider" Minimum="-120" Maximum="-40"
-                    SmallChange="1" LargeChange="10" ValueChanged="ContrastSlider_Changed"/>
+            <!-- ===== LAYOUT: the header doubles as this group's only field label ===== -->
+            <Border Style="{StaticResource SettingsSeparator}"/>
+            <TextBlock Text="LAYOUT" Style="{StaticResource SettingsSectionHeader}"/>
+
+            <ComboBox x:Name="LayoutCombo" SelectionChanged="LayoutCombo_Changed">
+              <ComboBoxItem Content="Stacked"/>
+              <ComboBoxItem Content="Single view"/>
+            </ComboBox>
           </StackPanel>
         </Border>
       </Popup>

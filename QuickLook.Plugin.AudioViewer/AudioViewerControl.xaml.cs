@@ -972,9 +972,7 @@ namespace QuickLook.Plugin.AudioViewer
                 ? $"{Math.Round(20.0 * Math.Log10(mag + 1e-12))} dB"
                 : mag.ToString("0.000");
 
-            string pitch = PluginSettings.HoverReadoutMode == HoverReadoutMode.MidiNote
-                ? MidiNote.Format(freq)
-                : AxisTicks.FormatHz(freq);
+            string pitch = HoverReadoutFormatter.FormatPitch(freq, PluginSettings.HoverReadoutMode);
             HoverText.Text = $"{AxisTicks.FormatTime(time)}  ·  {pitch}  ·  {level}";
 
             var pc = e.GetPosition(ContentGrid);

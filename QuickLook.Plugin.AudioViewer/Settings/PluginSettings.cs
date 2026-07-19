@@ -72,10 +72,10 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("FileInfoDisplay", value.ToString(), Domain);
         }
 
-        /// <summary>Spectrogram hover readout: nearest MIDI note (default) vs. raw frequency.</summary>
+        /// <summary>Spectrogram hover readout: nearest MIDI note, raw frequency, or both (default).</summary>
         public static HoverReadoutMode HoverReadoutMode
         {
-            get => ParseEnum("HoverReadoutMode", HoverReadoutMode.MidiNote);
+            get => ParseEnum("HoverReadoutMode", HoverReadoutMode.Both);
             set => SettingHelper.Set("HoverReadoutMode", value.ToString(), Domain);
         }
 
