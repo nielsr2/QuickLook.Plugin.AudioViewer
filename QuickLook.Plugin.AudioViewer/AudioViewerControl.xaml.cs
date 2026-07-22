@@ -82,9 +82,9 @@ namespace QuickLook.Plugin.AudioViewer
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             Loaded -= OnLoaded;
+            WaveStream playbackStream = null;
             try
             {
-                WaveStream playbackStream = null;
                 WaveformData waveform = null;
                 string infoText = null;
 
@@ -96,17 +96,37 @@ namespace QuickLook.Plugin.AudioViewer
                         waveform = WaveformData.Compute(scan, TimelineColumns(scan.TotalTime.TotalSeconds));
                 });
 
-                _player = new AudioPlayer(playbackStream);
-                _player.PlaybackStopped += (s, a) => Dispatcher.Invoke(OnPlaybackStopped);
-                _player.Volume = (float)VolumeSlider.Value;
-
+                // Waveform, file info, and the spectrogram are decoded independently of
+                // playback: show them even if AudioPlayer below fails to init (e.g. a
+                // many-channel WAV a stereo output device rejects in WASAPI shared mode).
                 Waveform.Waveform = waveform;
-                SetTimelineWidth(_player.Duration.TotalSeconds);
+                SetTimelineWidth(playbackStream.TotalTime.TotalSeconds);
                 FileInfoText.Text = infoText;
-                FileInfoTranslate.X = PluginSettings.InfoPosX; // restore last dragged position
+                FileInfoTranslate.X = PluginSettings.InfoPosX;
                 FileInfoTranslate.Y = PluginSettings.InfoPosY;
                 FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
                 StatusText.Visibility = Visibility.Collapsed;
+
+                ApplyLayout(PluginSettings.Layout);
+                if (PluginSettings.Layout == LayoutMode.Stacked)
+                    ShowSpectrogramAsync(false);
+
+                try
+                {
+                    _player = new AudioPlayer(playbackStream);
+                }
+                catch (Exception ex)
+                {
+                    playbackStream.Dispose();
+                    TimeText.Text = "Playback unavailable: " + ex.Message;
+                    PlayPauseButton.IsEnabled = false;
+                    SeekSlider.IsEnabled = false;
+                    VolumeSlider.IsEnabled = false;
+                    return;
+                }
+
+                _player.PlaybackStopped += (s, a) => Dispatcher.Invoke(OnPlaybackStopped);
+                _player.Volume = (float)VolumeSlider.Value;
                 UpdateTimeText();
 
                 _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
@@ -114,18 +134,16 @@ namespace QuickLook.Plugin.AudioViewer
                 _timer.Start();
 
                 if (PluginSettings.AutoPlay) TogglePlay(true);
-
-                ApplyLayout(PluginSettings.Layout);
-                if (PluginSettings.Layout == LayoutMode.Stacked)
-                    ShowSpectrogramAsync(false); // spectrogram is always visible when stacked
             }
             catch (AudioFormatException ex)
             {
+                playbackStream?.Dispose();
                 ShowError(ex.Message);
             }
             catch (Exception ex)
             {
-                ShowError("Could not play this audio file. " + ex.Message);
+                playbackStream?.Dispose();
+                ShowError("Could not open this audio file. " + ex.Message);
             }
         }
 
