@@ -137,12 +137,12 @@ namespace QuickLook.Plugin.AudioViewer
             }
             catch (AudioFormatException ex)
             {
-                playbackStream?.Dispose();
+                if (_player == null) playbackStream?.Dispose();
                 ShowError(ex.Message);
             }
             catch (Exception ex)
             {
-                playbackStream?.Dispose();
+                if (_player == null) playbackStream?.Dispose();
                 ShowError("Could not open this audio file. " + ex.Message);
             }
         }
