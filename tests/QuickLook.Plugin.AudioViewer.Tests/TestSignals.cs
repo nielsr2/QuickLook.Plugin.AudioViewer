@@ -38,6 +38,30 @@ namespace QuickLook.Plugin.AudioViewer.Tests
         }
 
         /// <summary>
+        /// Writes an N-channel WAV where each channel plays the same tone at a
+        /// different (possibly zero) amplitude — for asserting that per-channel
+        /// waveform data tracks channels independently.
+        /// </summary>
+        public static string WriteMultiToneWav(string dir, int sampleRate, double seconds,
+            double[] channelAmplitudes, double freq = 1000)
+        {
+            var path = Path.Combine(dir, $"multitone_{Guid.NewGuid():N}.wav");
+            int channels = channelAmplitudes.Length;
+            var format = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, channels);
+            using (var writer = new WaveFileWriter(path, format))
+            {
+                int frames = (int)(sampleRate * seconds);
+                for (int i = 0; i < frames; i++)
+                {
+                    double phase = 2 * Math.PI * freq * i / sampleRate;
+                    for (int c = 0; c < channels; c++)
+                        writer.WriteSample((float)(channelAmplitudes[c] * Math.Sin(phase)));
+                }
+            }
+            return path;
+        }
+
+        /// <summary>
         /// A minimal ISampleProvider that repeats one fixed per-channel frame forever.
         /// frame.Length is the channel count. Used to unit-test channel-mixing logic
         /// with known values, without any real audio device or file I/O.

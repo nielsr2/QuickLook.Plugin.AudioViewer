@@ -333,7 +333,7 @@ namespace QuickLook.Plugin.AudioViewer
             _showingSpectrogram = !_showingSpectrogram;
             if (_showingSpectrogram) ShowSpectrogramAsync(false);
 
-            Waveform.Visibility = _showingSpectrogram ? Visibility.Collapsed : Visibility.Visible;
+            WaveScroll.Visibility = _showingSpectrogram ? Visibility.Collapsed : Visibility.Visible;
             SpectrogramImage.Visibility = _showingSpectrogram ? Visibility.Visible : Visibility.Collapsed;
             SpectrogramButton.Content = _showingSpectrogram ? "◂ Waveform" : "Spectrogram ▸";
             UpdateSpectrogramPlayheadVisibility();
@@ -346,8 +346,8 @@ namespace QuickLook.Plugin.AudioViewer
             {
                 WaveRow.Height = new GridLength(1, GridUnitType.Star);
                 SpecRow.Height = new GridLength(4, GridUnitType.Star);
-                Grid.SetRow(Waveform, 0);
-                Waveform.Visibility = Visibility.Visible;
+                Grid.SetRow(WaveScroll, 0);
+                WaveScroll.Visibility = Visibility.Visible;
                 SpectrogramImage.Visibility = Visibility.Visible;
                 SpectrogramButton.Visibility = Visibility.Collapsed;
                 _showingSpectrogram = true;
@@ -356,10 +356,10 @@ namespace QuickLook.Plugin.AudioViewer
             {
                 WaveRow.Height = new GridLength(0);
                 SpecRow.Height = new GridLength(1, GridUnitType.Star);
-                Grid.SetRow(Waveform, 1);
+                Grid.SetRow(WaveScroll, 1);
                 SpectrogramButton.Visibility = Visibility.Visible;
                 _showingSpectrogram = false;
-                Waveform.Visibility = Visibility.Visible;
+                WaveScroll.Visibility = Visibility.Visible;
                 SpectrogramImage.Visibility = Visibility.Collapsed;
                 SpectrogramButton.Content = "Spectrogram ▸";
             }

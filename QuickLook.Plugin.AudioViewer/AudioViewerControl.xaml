@@ -122,7 +122,10 @@
             <RowDefinition x:Name="SpecRow" Height="4*"/>
           </Grid.RowDefinitions>
 
-          <ctl:WaveformView x:Name="Waveform" Grid.Row="0"/>
+          <ScrollViewer x:Name="WaveScroll" Grid.Row="0"
+                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ctl:WaveformView x:Name="Waveform"/>
+          </ScrollViewer>
           <Image x:Name="SpectrogramImage" Grid.Row="1" Stretch="Fill" Visibility="Collapsed"/>
           <Rectangle x:Name="SpectrogramPlayhead" Grid.Row="0" Grid.RowSpan="2" Width="1.5"
                      Fill="#FFFF5252" HorizontalAlignment="Left" Visibility="Collapsed"/>
