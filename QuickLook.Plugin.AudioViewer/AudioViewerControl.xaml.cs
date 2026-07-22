@@ -404,9 +404,10 @@ namespace QuickLook.Plugin.AudioViewer
         private async void ShowSpectrogramAsync(bool forceRecompute)
         {
             int fftSize = PluginSettings.FftSize;
-            bool selectionChanged = _spectrogramChannelSelection.Mode != _channelSelection.Mode
-                || _spectrogramChannelSelection.ChannelA != _channelSelection.ChannelA
-                || _spectrogramChannelSelection.ChannelB != _channelSelection.ChannelB;
+            var selection = _channelSelection;
+            bool selectionChanged = _spectrogramChannelSelection.Mode != selection.Mode
+                || _spectrogramChannelSelection.ChannelA != selection.ChannelA
+                || _spectrogramChannelSelection.ChannelB != selection.ChannelB;
             bool needCompute = forceRecompute || _spectrogramFrames == null
                 || _spectrogramFftSize != fftSize || selectionChanged;
 
@@ -436,7 +437,7 @@ namespace QuickLook.Plugin.AudioViewer
                                 : fftSize / 2;
                             ISampleProvider source = stream.ToSampleProvider();
                             if (stream.WaveFormat.Channels > 2)
-                                source = new ChannelMixSampleProvider(source, _channelSelection);
+                                source = new ChannelMixSampleProvider(source, selection);
                             frames = SpectrogramGenerator.ComputeMagnitudes(source,
                                 fftSize, hop, MaxTimelineColumns + 16, out capped);
                         }
@@ -453,7 +454,7 @@ namespace QuickLook.Plugin.AudioViewer
                 _spectrogramFrames = frames;
                 _spectrogramSampleRate = sr;
                 _spectrogramFftSize = fftSize;
-                _spectrogramChannelSelection = _channelSelection;
+                _spectrogramChannelSelection = selection;
                 SpectrogramButton.IsEnabled = true;
             }
 
