@@ -36,5 +36,36 @@ namespace QuickLook.Plugin.AudioViewer.Tests
             }
             return path;
         }
+
+        /// <summary>
+        /// A minimal ISampleProvider that repeats one fixed per-channel frame forever.
+        /// frame.Length is the channel count. Used to unit-test channel-mixing logic
+        /// with known values, without any real audio device or file I/O.
+        /// </summary>
+        public sealed class FixedChannelSampleProvider : NAudio.Wave.ISampleProvider
+        {
+            private readonly float[] _frame;
+
+            public FixedChannelSampleProvider(int sampleRate, float[] frame)
+            {
+                _frame = frame;
+                WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, frame.Length);
+            }
+
+            public WaveFormat WaveFormat { get; }
+
+            public int Read(float[] buffer, int offset, int count)
+            {
+                int channels = _frame.Length;
+                int framesRequested = count / channels;
+                int written = 0;
+                for (int f = 0; f < framesRequested; f++)
+                {
+                    for (int c = 0; c < channels; c++)
+                        buffer[offset + written++] = _frame[c];
+                }
+                return written;
+            }
+        }
     }
 }
