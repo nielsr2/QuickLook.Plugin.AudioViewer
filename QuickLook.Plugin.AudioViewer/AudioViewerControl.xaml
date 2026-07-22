@@ -164,9 +164,12 @@
       </Border>
     </Grid>
 
-    <!-- Toggle button -->
-    <Button x:Name="SpectrogramButton" Grid.Row="2" HorizontalAlignment="Right"
-            Margin="0,8,0,0" Padding="10,4" Content="Spectrogram ▸"
-            Click="SpectrogramButton_Click"/>
+    <!-- Channel selector (multichannel files only) + toggle button -->
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+      <ComboBox x:Name="ChannelCombo" Width="140" Margin="0,0,8,0" Visibility="Collapsed"
+                VerticalAlignment="Center" SelectionChanged="ChannelCombo_Changed"/>
+      <Button x:Name="SpectrogramButton" Padding="10,4" Content="Spectrogram ▸"
+              Click="SpectrogramButton_Click"/>
+    </StackPanel>
   </Grid>
 </UserControl>

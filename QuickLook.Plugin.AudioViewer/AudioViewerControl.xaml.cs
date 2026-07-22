@@ -30,6 +30,9 @@ namespace QuickLook.Plugin.AudioViewer
         private int _spectrogramSampleRate;
         private int _spectrogramFftSize = -1;
 
+        private ChannelSelection _channelSelection = ChannelSelection.Mix;
+        private ChannelSelection _spectrogramChannelSelection = ChannelSelection.Mix;
+
         private bool _initializingSettings;
         private int _renderGeneration;
 
@@ -79,6 +82,36 @@ namespace QuickLook.Plugin.AudioViewer
             _initializingSettings = false;
         }
 
+        /// <summary>Show the channel selector only for files with more than 2 channels, and populate it.</summary>
+        private void InitChannelCombo(int channels)
+        {
+            _channelSelection = ChannelSelection.Mix;
+            if (channels <= 2)
+            {
+                ChannelCombo.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            ChannelCombo.Items.Clear();
+            ChannelCombo.Items.Add($"Mix (all {channels})");
+            for (int c = 1; c <= channels; c++)
+                ChannelCombo.Items.Add($"Channel {c}");
+            ChannelCombo.SelectionChanged -= ChannelCombo_Changed; // avoid firing while pre-selecting
+            ChannelCombo.SelectedIndex = 0;
+            ChannelCombo.SelectionChanged += ChannelCombo_Changed;
+            ChannelCombo.Visibility = Visibility.Visible;
+        }
+
+        private void ChannelCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (ChannelCombo.SelectedIndex < 0) return;
+            _channelSelection = ChannelCombo.SelectedIndex == 0
+                ? ChannelSelection.Mix
+                : ChannelSelection.Solo(ChannelCombo.SelectedIndex - 1);
+            _player?.SetChannelSelection(_channelSelection);
+            ShowSpectrogramAsync(true);
+        }
+
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             Loaded -= OnLoaded;
@@ -106,6 +139,7 @@ namespace QuickLook.Plugin.AudioViewer
                 FileInfoTranslate.Y = PluginSettings.InfoPosY;
                 FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
                 StatusText.Visibility = Visibility.Collapsed;
+                InitChannelCombo(playbackStream.WaveFormat.Channels);
 
                 ApplyLayout(PluginSettings.Layout);
                 if (PluginSettings.Layout == LayoutMode.Stacked)
@@ -370,7 +404,11 @@ namespace QuickLook.Plugin.AudioViewer
         private async void ShowSpectrogramAsync(bool forceRecompute)
         {
             int fftSize = PluginSettings.FftSize;
-            bool needCompute = forceRecompute || _spectrogramFrames == null || _spectrogramFftSize != fftSize;
+            bool selectionChanged = _spectrogramChannelSelection.Mode != _channelSelection.Mode
+                || _spectrogramChannelSelection.ChannelA != _channelSelection.ChannelA
+                || _spectrogramChannelSelection.ChannelB != _channelSelection.ChannelB;
+            bool needCompute = forceRecompute || _spectrogramFrames == null
+                || _spectrogramFftSize != fftSize || selectionChanged;
 
             if (needCompute)
             {
@@ -396,7 +434,10 @@ namespace QuickLook.Plugin.AudioViewer
                             int hop = audioFrames > 0
                                 ? Math.Max(fftSize / 4, (int)(audioFrames / Math.Max(1, targetCols)))
                                 : fftSize / 2;
-                            frames = SpectrogramGenerator.ComputeMagnitudes(stream.ToSampleProvider(),
+                            ISampleProvider source = stream.ToSampleProvider();
+                            if (stream.WaveFormat.Channels > 2)
+                                source = new ChannelMixSampleProvider(source, _channelSelection);
+                            frames = SpectrogramGenerator.ComputeMagnitudes(source,
                                 fftSize, hop, MaxTimelineColumns + 16, out capped);
                         }
                     });
@@ -412,6 +453,7 @@ namespace QuickLook.Plugin.AudioViewer
                 _spectrogramFrames = frames;
                 _spectrogramSampleRate = sr;
                 _spectrogramFftSize = fftSize;
+                _spectrogramChannelSelection = _channelSelection;
                 SpectrogramButton.IsEnabled = true;
             }
 
