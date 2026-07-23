@@ -124,7 +124,10 @@
 
           <ScrollViewer x:Name="WaveScroll" Grid.Row="0"
                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <ctl:WaveformView x:Name="Waveform"/>
+            <!-- MinHeight keeps mono/stereo waveforms stretched to fill the pane like
+                 before multichannel support; many-channel files exceed the viewport at
+                 LaneHeight-per-channel and this MinHeight has no effect, so they scroll. -->
+            <ctl:WaveformView x:Name="Waveform" MinHeight="{Binding ViewportHeight, ElementName=WaveScroll}"/>
           </ScrollViewer>
           <Image x:Name="SpectrogramImage" Grid.Row="1" Stretch="Fill" Visibility="Collapsed"/>
           <Rectangle x:Name="SpectrogramPlayhead" Grid.Row="0" Grid.RowSpan="2" Width="1.5"
