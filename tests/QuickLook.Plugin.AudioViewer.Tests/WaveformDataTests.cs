@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using QuickLook.Plugin.AudioViewer.Audio;
 using Xunit;
@@ -243,6 +244,120 @@ namespace QuickLook.Plugin.AudioViewer.Tests
                 }
             }
             finally { File.Delete(wav); }
+        }
+
+        // ---- Progressive fill tests (P4) ----
+
+        [Fact]
+        public void Compute_Progressive_InvokesCallbackAboutProgressStepsTimes()
+        {
+            const int progressSteps = 10;
+            var wav = TestSignals.WriteSineWav(Path.GetTempPath(), seconds: 1.0, amplitude: 1.0, channels: 1);
+            try
+            {
+                int count = 0;
+                using (var stream = AudioReaderFactory.Create(wav))
+                    WaveformData.Compute(stream, columns: 100, onProgress: _ => count++, progressSteps: progressSteps);
+
+                Assert.InRange(count, progressSteps - 1, progressSteps + 1);
+            }
+            finally { File.Delete(wav); }
+        }
+
+        [Fact]
+        public void Compute_Progressive_FillsColumnsLeftToRight()
+        {
+            const int columns = 100;
+            const int lateColumn = columns - 1;
+            var wav = TestSignals.WriteSineWav(Path.GetTempPath(), seconds: 1.0, amplitude: 1.0, channels: 1);
+            try
+            {
+                var snapshots = new List<WaveformData>();
+                using (var stream = AudioReaderFactory.Create(wav))
+                    WaveformData.Compute(stream, columns, onProgress: s => snapshots.Add(s), progressSteps: 10);
+
+                Assert.True(snapshots.Count >= 2);
+                var first = snapshots[0];
+                var last = snapshots[snapshots.Count - 1];
+
+                // The late column is still untouched (flat silence) in the first snapshot...
+                Assert.Equal(0f, first.Max[0][lateColumn]);
+                Assert.Equal(0f, first.Min[0][lateColumn]);
+                // ...and an early column is already filled by the first snapshot (loud sine).
+                Assert.InRange(first.Max[0][0], 0.9f, 1.01f);
+                // ...but the late column is filled by the final snapshot.
+                Assert.InRange(last.Max[0][lateColumn], 0.9f, 1.01f);
+            }
+            finally { File.Delete(wav); }
+        }
+
+        [Fact]
+        public void Compute_Progressive_SnapshotsAreIndependentCopies()
+        {
+            const int columns = 100;
+            const int lateColumn = columns - 1;
+            var wav = TestSignals.WriteSineWav(Path.GetTempPath(), seconds: 1.0, amplitude: 1.0, channels: 1);
+            try
+            {
+                var snapshots = new List<WaveformData>();
+                using (var stream = AudioReaderFactory.Create(wav))
+                    WaveformData.Compute(stream, columns, onProgress: s => snapshots.Add(s), progressSteps: 10);
+
+                // Continuing (and completing) the scan must not retroactively fill the early
+                // snapshot's later columns — it captured a deep copy, not a live reference.
+                var first = snapshots[0];
+                Assert.Equal(0f, first.Max[0][lateColumn]);
+                Assert.Equal(0f, first.Min[0][lateColumn]);
+            }
+            finally { File.Delete(wav); }
+        }
+
+        [Fact]
+        public void Compute_Progressive_FinalSnapshotEqualsReturnedResult()
+        {
+            const int columns = 100;
+            var wav = TestSignals.WriteSineWav(Path.GetTempPath(), seconds: 1.0, amplitude: 1.0, channels: 1);
+            try
+            {
+                var snapshots = new List<WaveformData>();
+                WaveformData result;
+                using (var stream = AudioReaderFactory.Create(wav))
+                    result = WaveformData.Compute(stream, columns, onProgress: s => snapshots.Add(s), progressSteps: 10);
+
+                AssertWaveformsEqual(result, snapshots[snapshots.Count - 1]);
+            }
+            finally { File.Delete(wav); }
+        }
+
+        [Fact]
+        public void Compute_NullProgress_MatchesPlainCompute()
+        {
+            const int columns = 300;
+            var wav = TestSignals.WriteMultiToneWav(Path.GetTempPath(), 44100, 0.5,
+                new[] { 1.0, 0.0, 0.5 });
+            try
+            {
+                WaveformData plain, nullProgress;
+                using (var stream = AudioReaderFactory.Create(wav))
+                    plain = WaveformData.Compute(stream, columns);
+                using (var stream = AudioReaderFactory.Create(wav))
+                    nullProgress = WaveformData.Compute(stream, columns, onProgress: null, progressSteps: 10);
+
+                AssertWaveformsEqual(plain, nullProgress);
+            }
+            finally { File.Delete(wav); }
+        }
+
+        private static void AssertWaveformsEqual(WaveformData expected, WaveformData actual)
+        {
+            Assert.Equal(expected.ChannelCount, actual.ChannelCount);
+            Assert.Equal(expected.Columns, actual.Columns);
+            for (int c = 0; c < expected.ChannelCount; c++)
+                for (int col = 0; col < expected.Columns; col++)
+                {
+                    Assert.Equal(expected.Max[c][col], actual.Max[c][col]);
+                    Assert.Equal(expected.Min[c][col], actual.Min[c][col]);
+                }
         }
 
         [Fact]

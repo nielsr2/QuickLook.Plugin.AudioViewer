@@ -202,10 +202,29 @@ namespace QuickLook.Plugin.AudioViewer
                 try
                 {
                     WaveformData result = null;
+                    // One-pending throttle: the scan thread fires ~10 progressive snapshots, but
+                    // a slow UI thread must not accumulate a backlog. While a dispatched snapshot
+                    // is still pending we skip delivering another; the final full result below
+                    // always lands regardless of whether the last snapshot was skipped.
+                    bool snapshotPending = false;
                     await Task.Run(() =>
                     {
                         using (var scan = AudioReaderFactory.Create(_path))
-                            result = WaveformData.Compute(scan, TimelineColumns(scan.TotalTime.TotalSeconds));
+                            result = WaveformData.Compute(
+                                scan,
+                                TimelineColumns(scan.TotalTime.TotalSeconds),
+                                onProgress: snapshot =>
+                                {
+                                    // Runs on the scan thread — all UI access via the dispatcher only.
+                                    if (snapshotPending) return;
+                                    snapshotPending = true;
+                                    Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+                                    {
+                                        snapshotPending = false;
+                                        if (!IsLoaded) return; // unloaded mid-scan; don't touch UI
+                                        Waveform.Waveform = snapshot;
+                                    }));
+                                });
                     });
 
                     if (!IsLoaded) return; // control was unloaded mid-scan; don't touch UI

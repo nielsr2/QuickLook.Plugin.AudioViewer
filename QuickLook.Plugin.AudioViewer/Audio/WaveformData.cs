@@ -24,10 +24,44 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         }
 
         public static WaveformData Compute(WaveStream stream, int columns = 2000)
+            => Compute(stream, columns, onProgress: null);
+
+        /// <summary>
+        /// Streaming waveform scan with optional progressive delivery: when <paramref name="onProgress"/>
+        /// is non-null and the stream length is known, it is invoked roughly <paramref name="progressSteps"/>
+        /// times over the pass, each with an INDEPENDENT deep-copied snapshot of the partial result
+        /// (columns not yet scanned remain zero). The final snapshot delivered equals the returned value.
+        /// When <paramref name="onProgress"/> is null the pass runs with zero added overhead (no cloning);
+        /// when the length is unknown no intermediate callbacks fire.
+        /// </summary>
+        public static WaveformData Compute(WaveStream stream, int columns, Action<WaveformData> onProgress, int progressSteps = 10)
         {
             if (columns < 1) columns = 1;
+            if (progressSteps < 1) progressSteps = 1;
 
-            return IsPcm16(stream.WaveFormat) ? ComputePcm16(stream, columns) : ComputeFloat(stream, columns);
+            return IsPcm16(stream.WaveFormat)
+                ? ComputePcm16(stream, columns, onProgress, progressSteps)
+                : ComputeFloat(stream, columns, onProgress, progressSteps);
+        }
+
+        /// <summary>
+        /// Deep-copies the current per-channel Min/Max accumulator arrays into a fresh, fully
+        /// independent WaveformData — later mutation of the source arrays cannot alter it.
+        /// </summary>
+        private static WaveformData Snapshot(float[][] min, float[][] max)
+        {
+            int channels = min.Length;
+            var mn = new float[channels][];
+            var mx = new float[channels][];
+            for (int c = 0; c < channels; c++)
+            {
+                int cols = min[c].Length;
+                mn[c] = new float[cols];
+                mx[c] = new float[cols];
+                Array.Copy(min[c], mn[c], cols);
+                Array.Copy(max[c], mx[c], cols);
+            }
+            return new WaveformData(mn, mx);
         }
 
         /// <summary>
@@ -69,7 +103,8 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         /// Fast path for 16-bit integer PCM: reads raw bytes directly off the stream and
         /// decodes each sample inline, avoiding NAudio's per-sample Pcm16BitToSampleProvider.
         /// </summary>
-        private static WaveformData ComputePcm16(WaveStream stream, int columns)
+        private static WaveformData ComputePcm16(WaveStream stream, int columns,
+            Action<WaveformData> onProgress, int progressSteps)
         {
             var format = stream.WaveFormat;
             int channels = Math.Max(1, format.Channels);
@@ -78,6 +113,14 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             long totalFrames = stream.BlockAlign > 0 ? stream.Length / stream.BlockAlign : 0;
             if (totalFrames <= 0) totalFrames = long.MaxValue;
             long framesPerColumn = Math.Max(1, totalFrames / columns);
+
+            // Progress is only meaningful when the length is known; the null path allocates
+            // and clones nothing (doProgress stays false → the per-frame block is a bare branch).
+            bool doProgress = onProgress != null && totalFrames != long.MaxValue;
+            long progressInterval = doProgress ? Math.Max(1, totalFrames / progressSteps) : 0;
+            long framesProcessed = 0;
+            long nextProgressAt = progressInterval;
+            int progressFired = 0;
 
             var min = new float[channels][];
             var max = new float[channels][];
@@ -126,6 +169,19 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                             framesInColumn = 0;
                         }
                     }
+
+                    if (doProgress)
+                    {
+                        framesProcessed++;
+                        if (framesProcessed >= nextProgressAt
+                            && progressFired < progressSteps - 1
+                            && framesProcessed < totalFrames)
+                        {
+                            onProgress(Snapshot(min, max));
+                            progressFired++;
+                            nextProgressAt += progressInterval;
+                        }
+                    }
                 }
 
                 remainderBytes = available - usableBytes;
@@ -134,6 +190,9 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             }
 
             FlushPcm16Column(min, max, minAcc, maxAcc, channels, col, framesInColumn);
+
+            // Final snapshot: equals the returned result, and is the last snapshot delivered.
+            if (doProgress) onProgress(Snapshot(min, max));
 
             return new WaveformData(min, max);
         }
@@ -165,7 +224,8 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         /// float, 8/24/32-bit int, ADPCM-via-decoder, etc.), decoded generically through
         /// NAudio's ISampleProvider chain.
         /// </summary>
-        private static WaveformData ComputeFloat(WaveStream stream, int columns)
+        private static WaveformData ComputeFloat(WaveStream stream, int columns,
+            Action<WaveformData> onProgress, int progressSteps)
         {
             var provider = stream.ToSampleProvider();
             int channels = Math.Max(1, provider.WaveFormat.Channels);
@@ -176,6 +236,14 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             if (totalFrames <= 0) totalFrames = long.MaxValue;
 
             long framesPerColumn = Math.Max(1, totalFrames / columns);
+
+            // Progress is only meaningful when the length is known; the null path allocates
+            // and clones nothing (doProgress stays false → the per-frame block is a bare branch).
+            bool doProgress = onProgress != null && totalFrames != long.MaxValue;
+            long progressInterval = doProgress ? Math.Max(1, totalFrames / progressSteps) : 0;
+            long framesProcessed = 0;
+            long nextProgressAt = progressInterval;
+            int progressFired = 0;
 
             var min = new float[channels][];
             var max = new float[channels][];
@@ -218,10 +286,26 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                             framesInColumn = 0;
                         }
                     }
+
+                    if (doProgress)
+                    {
+                        framesProcessed++;
+                        if (framesProcessed >= nextProgressAt
+                            && progressFired < progressSteps - 1
+                            && framesProcessed < totalFrames)
+                        {
+                            onProgress(Snapshot(min, max));
+                            progressFired++;
+                            nextProgressAt += progressInterval;
+                        }
+                    }
                 }
             }
 
             FlushFloatColumn(min, max, minAcc, maxAcc, channels, col, framesInColumn);
+
+            // Final snapshot: equals the returned result, and is the last snapshot delivered.
+            if (doProgress) onProgress(Snapshot(min, max));
 
             return new WaveformData(min, max);
         }
