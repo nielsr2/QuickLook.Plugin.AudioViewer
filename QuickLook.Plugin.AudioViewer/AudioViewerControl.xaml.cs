@@ -125,27 +125,31 @@ namespace QuickLook.Plugin.AudioViewer
             WaveStream playbackStream = null;
             try
             {
-                WaveformData waveform = null;
                 string infoText = null;
 
+                // Phase 1 (fast): open the playback stream and build the file-info text
+                // only. The slow full-file waveform scan is deferred to Phase 2 so info,
+                // transport, and audio appear almost immediately instead of waiting on it.
                 await Task.Run(() =>
                 {
                     playbackStream = AudioReaderFactory.Create(_path);
                     infoText = BuildFileInfo(_path, playbackStream);
-                    using (var scan = AudioReaderFactory.Create(_path))
-                        waveform = WaveformData.Compute(scan, TimelineColumns(scan.TotalTime.TotalSeconds));
                 });
 
-                // Waveform, file info, and the spectrogram are decoded independently of
-                // playback: show them even if AudioPlayer below fails to init (e.g. a
-                // many-channel WAV a stereo output device rejects in WASAPI shared mode).
-                Waveform.Waveform = waveform;
+                // File info, transport, and the player are set up independently of the
+                // waveform (Phase 2) and even of playback: they show even if AudioPlayer
+                // below fails to init (e.g. a many-channel WAV a stereo output device
+                // rejects in WASAPI shared mode).
                 SetTimelineWidth(playbackStream.TotalTime.TotalSeconds);
                 FileInfoText.Text = infoText;
                 FileInfoTranslate.X = PluginSettings.InfoPosX;
                 FileInfoTranslate.Y = PluginSettings.InfoPosY;
                 FileInfoPanel.Visibility = PluginSettings.ShowFileInfo ? Visibility.Visible : Visibility.Collapsed;
-                StatusText.Visibility = Visibility.Collapsed;
+                // Keep the status line up while the background waveform scan runs (Phase 2
+                // clears it). The exact text is also the guard Phase 2 checks before
+                // collapsing, so it doesn't stomp the Stacked spectrogram path below.
+                StatusText.Text = "Analyzing waveform…";
+                StatusText.Visibility = Visibility.Visible;
                 InitChannelCombo(playbackStream.WaveFormat.Channels);
 
                 // Many-channel files (>2ch) always open showing just the waveform lane
@@ -190,6 +194,34 @@ namespace QuickLook.Plugin.AudioViewer
                 _timer.Start();
 
                 if (PluginSettings.AutoPlay) TogglePlay(true);
+
+                // Phase 2 (background): the slow full-file waveform scan. Its own stream
+                // (disposed by the using) — playbackStream is owned by _player now. This
+                // gets its own try/catch so a waveform failure never tears down the
+                // already-running player.
+                try
+                {
+                    WaveformData result = null;
+                    await Task.Run(() =>
+                    {
+                        using (var scan = AudioReaderFactory.Create(_path))
+                            result = WaveformData.Compute(scan, TimelineColumns(scan.TotalTime.TotalSeconds));
+                    });
+
+                    if (!IsLoaded) return; // control was unloaded mid-scan; don't touch UI
+                    Waveform.Waveform = result;
+                    // Only collapse the status line if it still shows our Phase-1 message —
+                    // the Stacked spectrogram path may have replaced it with its own status,
+                    // which we must not stomp.
+                    if (StatusText.Text == "Analyzing waveform…")
+                        StatusText.Visibility = Visibility.Collapsed;
+                }
+                catch (Exception ex)
+                {
+                    if (!IsLoaded) return; // unloaded mid-scan; nothing to show
+                    StatusText.Text = "Waveform unavailable: " + ex.Message;
+                    StatusText.Visibility = Visibility.Visible;
+                }
             }
             catch (AudioFormatException ex)
             {
