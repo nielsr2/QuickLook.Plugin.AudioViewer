@@ -27,13 +27,10 @@ namespace QuickLook.Plugin.AudioViewer.Controls
 
         // Rebuild key: the bitmap is valid only for the WaveformData reference AND the
         // integer lanePixelHeight it was rasterized at (width is always Columns and is
-        // stretched horizontally, so it is deliberately NOT part of the key).
-        //  - "completed" key: what the currently-held _waveBitmap was actually built for.
-        //  - "requested" key: what the most recently spawned rebuild is building for,
-        //    used to avoid spawning a duplicate rebuild every OnRender while one is
-        //    already in flight for the same key.
-        private WaveformData _bitmapWaveform;      // completed key (waveform ref)
-        private int _bitmapLanePx = -1;            // completed key (lanePixelHeight)
+        // stretched horizontally, so it is deliberately NOT part of the key). The
+        // "requested" key is what the most recently spawned rebuild is building for, used
+        // to avoid spawning a duplicate rebuild every OnRender while one is already in
+        // flight for the same key.
         private WaveformData _requestedWaveform;   // last-requested key (waveform ref)
         private int _requestedLanePx = -1;         // last-requested key (lanePixelHeight)
         private int _bitmapGeneration;             // staleness guard for async completions
@@ -78,8 +75,6 @@ namespace QuickLook.Plugin.AudioViewer.Controls
                 // Force a rebuild: drop the cached bitmap and both keys, and bump the
                 // generation so any in-flight rebuild for the old waveform is discarded.
                 _waveBitmap = null;
-                _bitmapWaveform = null;
-                _bitmapLanePx = -1;
                 _requestedWaveform = null;
                 _requestedLanePx = -1;
                 _bitmapGeneration++;
@@ -157,8 +152,6 @@ namespace QuickLook.Plugin.AudioViewer.Controls
                     {
                         if (gen != _bitmapGeneration) return; // a newer rebuild superseded this one
                         _waveBitmap = bmp;
-                        _bitmapWaveform = wf;   // record the key this bitmap was built for
-                        _bitmapLanePx = lph;
                         InvalidateVisual();
                     }));
                 });

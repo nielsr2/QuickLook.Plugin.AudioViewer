@@ -207,6 +207,13 @@ namespace QuickLook.Plugin.AudioViewer
                     // is still pending we skip delivering another; the final full result below
                     // always lands regardless of whether the last snapshot was skipped.
                     bool snapshotPending = false;
+                    // Progressive snapshots post at Background priority, but the scan-completion
+                    // continuation below resumes at Normal priority — and WPF's dispatcher drains
+                    // by priority, not FIFO. So a snapshot queued just before the (now fast) scan
+                    // finishes can run AFTER the final assignment and clobber the complete waveform
+                    // with a partial one. Once the final result is shown, this flag blocks any late
+                    // snapshot from regressing it. Both run on the single UI thread, so it's race-free.
+                    bool waveformFinalized = false;
                     await Task.Run(() =>
                     {
                         using (var scan = AudioReaderFactory.Create(_path))
@@ -221,6 +228,7 @@ namespace QuickLook.Plugin.AudioViewer
                                     Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
                                     {
                                         snapshotPending = false;
+                                        if (waveformFinalized) return; // final result already shown; never regress to a partial
                                         if (!IsLoaded) return; // unloaded mid-scan; don't touch UI
                                         Waveform.Waveform = snapshot;
                                     }));
@@ -228,6 +236,7 @@ namespace QuickLook.Plugin.AudioViewer
                     });
 
                     if (!IsLoaded) return; // control was unloaded mid-scan; don't touch UI
+                    waveformFinalized = true;
                     Waveform.Waveform = result;
                     // Only collapse the status line if it still shows our Phase-1 message —
                     // the Stacked spectrogram path may have replaced it with its own status,
