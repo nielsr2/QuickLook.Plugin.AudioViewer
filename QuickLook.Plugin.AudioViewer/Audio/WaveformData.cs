@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using NAudio.Dmo;
 using NAudio.Wave;
 
@@ -23,8 +24,9 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             Max = max;
         }
 
-        public static WaveformData Compute(WaveStream stream, int columns = 2000)
-            => Compute(stream, columns, onProgress: null);
+        public static WaveformData Compute(WaveStream stream, int columns = 2000,
+            CancellationToken token = default)
+            => Compute(stream, columns, onProgress: null, token: token);
 
         /// <summary>
         /// Streaming waveform scan with optional progressive delivery: when <paramref name="onProgress"/>
@@ -34,14 +36,15 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         /// When <paramref name="onProgress"/> is null the pass runs with zero added overhead (no cloning);
         /// when the length is unknown no intermediate callbacks fire.
         /// </summary>
-        public static WaveformData Compute(WaveStream stream, int columns, Action<WaveformData> onProgress, int progressSteps = 10)
+        public static WaveformData Compute(WaveStream stream, int columns, Action<WaveformData> onProgress,
+            int progressSteps = 10, CancellationToken token = default)
         {
             if (columns < 1) columns = 1;
             if (progressSteps < 1) progressSteps = 1;
 
             return IsPcm16(stream.WaveFormat)
-                ? ComputePcm16(stream, columns, onProgress, progressSteps)
-                : ComputeFloat(stream, columns, onProgress, progressSteps);
+                ? ComputePcm16(stream, columns, onProgress, progressSteps, token)
+                : ComputeFloat(stream, columns, onProgress, progressSteps, token);
         }
 
         /// <summary>
@@ -104,7 +107,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         /// decodes each sample inline, avoiding NAudio's per-sample Pcm16BitToSampleProvider.
         /// </summary>
         private static WaveformData ComputePcm16(WaveStream stream, int columns,
-            Action<WaveformData> onProgress, int progressSteps)
+            Action<WaveformData> onProgress, int progressSteps, CancellationToken token)
         {
             var format = stream.WaveFormat;
             int channels = Math.Max(1, format.Channels);
@@ -144,6 +147,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             int read;
             while ((read = stream.Read(buffer, remainderBytes, buffer.Length - remainderBytes)) > 0)
             {
+                token.ThrowIfCancellationRequested(); // abort promptly if the preview closed
                 int available = remainderBytes + read;
                 int usableBytes = available - (available % bytesPerFrame);
 
@@ -225,7 +229,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         /// NAudio's ISampleProvider chain.
         /// </summary>
         private static WaveformData ComputeFloat(WaveStream stream, int columns,
-            Action<WaveformData> onProgress, int progressSteps)
+            Action<WaveformData> onProgress, int progressSteps, CancellationToken token)
         {
             var provider = stream.ToSampleProvider();
             int channels = Math.Max(1, provider.WaveFormat.Channels);
@@ -265,6 +269,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
 
             while ((read = provider.Read(buffer, 0, buffer.Length)) > 0)
             {
+                token.ThrowIfCancellationRequested(); // abort promptly if the preview closed
                 for (int i = 0; i + channels <= read; i += channels)
                 {
                     for (int c = 0; c < channels; c++)

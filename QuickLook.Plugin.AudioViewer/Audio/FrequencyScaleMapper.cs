@@ -49,6 +49,36 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         public static double RowCenterFrequency(int row, int rowCount, FrequencyScale scale, double fMin, double fMax)
             => FractionToFrequency(rowCount <= 1 ? 0.0 : (row + 0.5) / rowCount, scale, fMin, fMax);
 
+        /// <summary>Inverse of <see cref="FractionToFrequency"/>: frequency to its fraction u in [0,1].</summary>
+        public static double FrequencyToFraction(double freq, FrequencyScale scale, double fMin, double fMax)
+        {
+            if (fMax <= fMin) return 0.0;
+            double u;
+            switch (scale)
+            {
+                case FrequencyScale.Log:
+                    double lo = Math.Max(fMin, 1e-6);
+                    u = Math.Log(Math.Max(freq, lo) / lo) / Math.Log(fMax / lo);
+                    break;
+                case FrequencyScale.Mel:
+                    double m0 = HzToMel(fMin), m1 = HzToMel(fMax);
+                    u = (HzToMel(freq) - m0) / (m1 - m0);
+                    break;
+                default: // Linear
+                    u = (freq - fMin) / (fMax - fMin);
+                    break;
+            }
+            return u < 0 ? 0 : u > 1 ? 1 : u;
+        }
+
+        /// <summary>Top of the visible axis in Hz for a render (fMaxHz &lt;= 0 means Nyquist).</summary>
+        public static double EffectiveFMax(int sampleRate, double fMaxHz)
+        {
+            double nyquist = sampleRate / 2.0;
+            double fMax = fMaxHz > 0 ? Math.Min(fMaxHz, nyquist) : nyquist;
+            return fMax;
+        }
+
         /// <summary>Lowest frequency shown; 0 for linear/mel, one-bin/20 Hz floor for log.</summary>
         public static double EffectiveFMin(FrequencyScale scale, int fftSize, int sampleRate)
         {

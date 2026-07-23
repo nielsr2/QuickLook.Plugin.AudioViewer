@@ -66,6 +66,22 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor);
         }
 
+        /// <summary>Re-color the waveform for the current light/dark theme, then redraw.</summary>
+        public void SetTheme(Color wave, Color playhead, Color background)
+        {
+            WaveBrush = FrozenBrush(wave);
+            PlayheadBrush = FrozenBrush(playhead);
+            BackgroundBrush = FrozenBrush(background);
+            InvalidateVisual();
+        }
+
+        private static Brush FrozenBrush(Color c)
+        {
+            var b = new SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
+
         public WaveformData Waveform
         {
             get => _waveform;

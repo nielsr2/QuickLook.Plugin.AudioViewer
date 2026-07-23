@@ -2,42 +2,137 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ctl="clr-namespace:QuickLook.Plugin.AudioViewer.Controls"
-             Background="#FF1E1E1E">
-  <Grid Margin="12">
+             Focusable="True" PreviewKeyDown="OnPreviewKeyDown"
+             Background="{DynamicResource AppBackground}">
+  <!-- Brush keys are overwritten per light/dark theme in the constructor
+       (ThemePalette.Apply). These defaults are the dark palette so the control
+       still resolves them if applied late. -->
+  <UserControl.Resources>
+    <SolidColorBrush x:Key="AppBackground" Color="#FF1E1E1E"/>
+    <SolidColorBrush x:Key="PrimaryText" Color="#FFDDDDDD"/>
+    <SolidColorBrush x:Key="SecondaryText" Color="#FFBBBBBB"/>
+    <SolidColorBrush x:Key="PopupBackground" Color="#FF2A2A2A"/>
+    <SolidColorBrush x:Key="PopupBorder" Color="#FF565656"/>
+    <SolidColorBrush x:Key="OverlayBackground" Color="#CC000000"/>
+    <SolidColorBrush x:Key="OverlayBorder" Color="#40FFFFFF"/>
+    <SolidColorBrush x:Key="OverlayText" Color="#FFEDEDED"/>
+    <SolidColorBrush x:Key="OverlayClose" Color="#FFCCCCCC"/>
+    <SolidColorBrush x:Key="Playhead" Color="#FFFF5252"/>
+
+    <!-- Chrome-free glyph button used by the note-layer toolbar (icon only, subtle hover). -->
+    <Style x:Key="NoteToolBtn" TargetType="Button">
+      <Setter Property="Width" Value="27"/>
+      <Setter Property="Height" Value="24"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="{DynamicResource OverlayText}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="4,2">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background" Value="#33888888"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.4"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Settings popup: section eyebrow, field label and group divider. Keyed (not
+         implicit) so they can't leak into the transport bar or bleed into control
+         templates, and DynamicResource throughout so ThemePalette.Apply re-themes them. -->
+    <Style x:Key="SettingsSectionHeader" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,0,0,6"/>
+    </Style>
+
+    <Style x:Key="SettingsFieldLabel" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
+      <Setter Property="Margin" Value="0,0,0,2"/>
+    </Style>
+
+    <Style x:Key="SettingsSeparator" TargetType="Border">
+      <Setter Property="Height" Value="1"/>
+      <Setter Property="Background" Value="{DynamicResource PopupBorder}"/>
+      <Setter Property="Opacity" Value="0.6"/>
+      <Setter Property="Margin" Value="0,12,0,12"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <!-- Corner grip that resizes the settings popup (see SettingsResizeGrip_DragDelta). -->
+    <Style x:Key="SettingsResizeGrip" TargetType="Thumb">
+      <Setter Property="Width" Value="14"/>
+      <Setter Property="Height" Value="14"/>
+      <Setter Property="HorizontalAlignment" Value="Right"/>
+      <Setter Property="Margin" Value="0,6,0,0"/>
+      <Setter Property="Cursor" Value="SizeNWSE"/>
+      <Setter Property="ToolTip" Value="Drag to resize"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Thumb">
+            <!-- Transparent backing so the whole 14x14 box is draggable, not just the lines. -->
+            <Border Background="Transparent">
+              <Path Stroke="{DynamicResource SecondaryText}" StrokeThickness="1" Opacity="0.85"
+                    Data="M 13,3 L 3,13  M 13,7 L 7,13  M 13,11 L 11,13"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </UserControl.Resources>
+  <!-- IsSharedSizeScope lets the seek bar and the horizontal scrollbar share the
+       spectrogram's left/right gutter widths (frequency ruler and colorbar), so they
+       line up horizontally with the waveform and spectrogram. -->
+  <Grid Margin="12" Grid.IsSharedSizeScope="True">
     <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>   <!-- 0: transport controls -->
+      <RowDefinition Height="Auto"/>   <!-- 1: playback timeline -->
+      <RowDefinition Height="*"/>       <!-- 2: waveform + spectrogram -->
+      <RowDefinition Height="Auto"/>   <!-- 3: horizontal scrollbar (below the plot) -->
+      <RowDefinition Height="Auto"/>   <!-- 4: single-view toggle -->
     </Grid.RowDefinitions>
 
-    <!-- Transport bar -->
+    <!-- Transport controls (the timeline is on its own row below) -->
     <Grid Grid.Row="0" Margin="0,0,0,8">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="Auto"/>
-        <ColumnDefinition Width="Auto"/>
+        <ColumnDefinition Width="Auto"/>   <!-- play -->
+        <ColumnDefinition Width="Auto"/>   <!-- time -->
+        <ColumnDefinition Width="*"/>       <!-- spacer -->
+        <ColumnDefinition Width="Auto"/>   <!-- mute + volume -->
+        <ColumnDefinition Width="Auto"/>   <!-- auto-play -->
+        <ColumnDefinition Width="Auto"/>   <!-- settings -->
       </Grid.ColumnDefinitions>
 
       <Button x:Name="PlayPauseButton" Grid.Column="0" Width="40" Height="28"
               Content="&#9654;" Click="PlayPauseButton_Click"/>
-      <Slider x:Name="SeekSlider" Grid.Column="1" Margin="8,0" VerticalAlignment="Center"
-              Minimum="0" Maximum="1" SmallChange="0.01" LargeChange="0.05"
-              Thumb.DragStarted="SeekSlider_DragStarted"
-              Thumb.DragCompleted="SeekSlider_DragCompleted"/>
-      <TextBlock x:Name="TimeText" Grid.Column="2" VerticalAlignment="Center"
-                 Foreground="#FFDDDDDD" Margin="4,0" Text="00:00 / 00:00"/>
+      <TextBlock x:Name="TimeText" Grid.Column="1" VerticalAlignment="Center"
+                 Foreground="{DynamicResource PrimaryText}" Margin="10,0" Text="00:00 / 00:00"/>
       <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,0" VerticalAlignment="Center">
-        <TextBlock Text="&#xE767;" FontFamily="Segoe MDL2 Assets" FontSize="14"
-                   Foreground="#FFDDDDDD" VerticalAlignment="Center" Margin="0,0,5,0"
-                   ToolTip="Volume"/>
+        <Button x:Name="MuteButton" Content="&#xE767;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" Margin="0,0,5,0"
+                Cursor="Hand" ToolTip="Mute / unmute (M)" Click="MuteButton_Click">
+          <!-- Chrome-free: render the glyph only, so it reads as an icon not a button. -->
+          <Button.Template>
+            <ControlTemplate TargetType="Button">
+              <Border Background="Transparent" Padding="2,0">
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+            </ControlTemplate>
+          </Button.Template>
+        </Button>
         <Slider x:Name="VolumeSlider" Width="80" VerticalAlignment="Center"
                 Minimum="0" Maximum="1" Value="0.8" ValueChanged="VolumeSlider_ValueChanged"/>
       </StackPanel>
       <CheckBox x:Name="AutoPlayCheck" Grid.Column="4" VerticalAlignment="Center"
-                Foreground="#FFDDDDDD" Content="Auto-play"
+                Foreground="{DynamicResource PrimaryText}" Content="Auto-play"
                 Checked="AutoPlayCheck_Changed" Unchecked="AutoPlayCheck_Changed"/>
 
       <ToggleButton x:Name="SettingsButton" Grid.Column="5" Width="30" Height="28"
@@ -46,50 +141,41 @@
       <Popup PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Bottom"
              StaysOpen="False" AllowsTransparency="True"
              IsOpen="{Binding IsChecked, ElementName=SettingsButton, Mode=TwoWay}">
-        <Border Background="#FF2A2A2A" BorderBrush="#FF565656" BorderThickness="1"
-                Padding="12" Margin="0,4,10,10">
+        <!-- Size is set in code from the remembered PluginSettings values, re-clamped to the
+             current screen (SettingsPaneMetrics) so a size saved on a bigger monitor can't
+             push the last group off-screen. The user drags the corner grip to resize. -->
+        <Border x:Name="SettingsPanel" Background="{DynamicResource PopupBackground}"
+                BorderBrush="{DynamicResource PopupBorder}"
+                BorderThickness="1" Padding="12" Margin="0,4,10,10">
           <Border.Effect>
             <DropShadowEffect Color="#000000" BlurRadius="10" ShadowDepth="2" Opacity="0.5"/>
           </Border.Effect>
-          <StackPanel Width="180">
-            <CheckBox x:Name="FileInfoCheck" Content="Show file info" Foreground="#FFDDDDDD"
-                      Margin="0,0,0,10" Checked="FileInfoCheck_Changed" Unchecked="FileInfoCheck_Changed"/>
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="*"/>      <!-- scrollable settings -->
+              <RowDefinition Height="Auto"/>   <!-- resize grip -->
+            </Grid.RowDefinitions>
 
-            <TextBlock Text="Layout" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
-            <ComboBox x:Name="LayoutCombo" Margin="0,0,0,8" SelectionChanged="LayoutCombo_Changed">
-              <ComboBoxItem Content="Stacked"/>
-              <ComboBoxItem Content="Single view"/>
-            </ComboBox>
+            <!-- Whatever doesn't fit the current height scrolls, so no group is ever
+                 unreachable. Horizontal scrolling stays off so the content tracks width. -->
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+          <!-- Grouped into four labelled sections. Moving whole label+control blocks between
+               groups is safe, but the ComboBoxItem order INSIDE each combo is load-bearing:
+               the handlers cast SelectedIndex straight to the enum / size array. -->
+          <StackPanel Margin="0,0,6,0">
 
-            <TextBlock Text="Frequency scale" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
+            <!-- ===== ANALYSIS: which part of the signal, at what resolution ===== -->
+            <TextBlock Text="ANALYSIS" Style="{StaticResource SettingsSectionHeader}"/>
+
+            <TextBlock Text="Frequency scale" Style="{StaticResource SettingsFieldLabel}"/>
             <ComboBox x:Name="FreqCombo" Margin="0,0,0,8" SelectionChanged="FreqCombo_Changed">
               <ComboBoxItem Content="Linear"/>
               <ComboBoxItem Content="Log"/>
               <ComboBoxItem Content="Mel"/>
             </ComboBox>
 
-            <TextBlock Text="Amplitude" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
-            <ComboBox x:Name="AmpCombo" Margin="0,0,0,8" SelectionChanged="AmpCombo_Changed">
-              <ComboBoxItem Content="Decibel (dB)"/>
-              <ComboBoxItem Content="Linear"/>
-            </ComboBox>
-
-            <TextBlock Text="Colormap" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
-            <ComboBox x:Name="ColorCombo" Margin="0,0,0,8" SelectionChanged="ColorCombo_Changed">
-              <ComboBoxItem Content="Magma"/>
-              <ComboBoxItem Content="Viridis"/>
-              <ComboBoxItem Content="Grayscale"/>
-            </ComboBox>
-
-            <TextBlock Text="FFT size" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
-            <ComboBox x:Name="FftCombo" Margin="0,0,0,8" SelectionChanged="FftCombo_Changed">
-              <ComboBoxItem Content="512"/>
-              <ComboBoxItem Content="1024"/>
-              <ComboBoxItem Content="2048"/>
-              <ComboBoxItem Content="4096"/>
-            </ComboBox>
-
-            <TextBlock Text="Max frequency" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
+            <TextBlock Text="Max frequency" Style="{StaticResource SettingsFieldLabel}"/>
             <ComboBox x:Name="MaxFreqCombo" Margin="0,0,0,8" SelectionChanged="MaxFreqCombo_Changed">
               <ComboBoxItem Content="Full"/>
               <ComboBoxItem Content="20 kHz"/>
@@ -97,12 +183,103 @@
               <ComboBoxItem Content="5 kHz"/>
             </ComboBox>
 
-            <TextBlock Text="Contrast (dB floor)" Foreground="#FFBBBBBB" Margin="0,0,0,2"/>
-            <Slider x:Name="ContrastSlider" Minimum="-120" Maximum="-40"
+            <TextBlock Text="FFT size" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="FftCombo" SelectionChanged="FftCombo_Changed">
+              <ComboBoxItem Content="512"/>
+              <ComboBoxItem Content="1024"/>
+              <ComboBoxItem Content="2048"/>
+              <ComboBoxItem Content="4096"/>
+            </ComboBox>
+
+            <!-- ===== APPEARANCE: how magnitude maps to colour ===== -->
+            <Border Style="{StaticResource SettingsSeparator}"/>
+            <TextBlock Text="APPEARANCE" Style="{StaticResource SettingsSectionHeader}"/>
+
+            <TextBlock Text="Amplitude" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="AmpCombo" Margin="0,0,0,8" SelectionChanged="AmpCombo_Changed">
+              <ComboBoxItem Content="Decibel (dB)"/>
+              <ComboBoxItem Content="Linear"/>
+            </ComboBox>
+
+            <TextBlock Text="Contrast (dB floor)" Style="{StaticResource SettingsFieldLabel}"/>
+            <Slider x:Name="ContrastSlider" Margin="0,0,0,8" Minimum="-120" Maximum="-40"
                     SmallChange="1" LargeChange="10" ValueChanged="ContrastSlider_Changed"/>
+
+            <TextBlock Text="Gamma (detail)" Style="{StaticResource SettingsFieldLabel}"/>
+            <Slider x:Name="GammaSlider" Margin="0,0,0,8" Minimum="0.3" Maximum="2.0"
+                    SmallChange="0.05" LargeChange="0.25" ValueChanged="GammaSlider_Changed"/>
+
+            <TextBlock Text="Colormap" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="ColorCombo" Margin="0,0,0,8" SelectionChanged="ColorCombo_Changed">
+              <ComboBoxItem Content="Magma"/>
+              <ComboBoxItem Content="Viridis"/>
+              <ComboBoxItem Content="Grayscale"/>
+              <ComboBoxItem Content="Inferno"/>
+              <ComboBoxItem Content="Plasma"/>
+              <ComboBoxItem Content="Turbo"/>
+              <ComboBoxItem Content="Heat"/>
+            </ComboBox>
+
+            <CheckBox x:Name="ReverseCheck" Content="Reverse colormap" Foreground="{DynamicResource PrimaryText}"
+                      Checked="ReverseCheck_Changed" Unchecked="ReverseCheck_Changed"/>
+
+            <!-- ===== OVERLAYS: what is drawn on top, and the cursor readout ===== -->
+            <Border Style="{StaticResource SettingsSeparator}"/>
+            <TextBlock Text="OVERLAYS" Style="{StaticResource SettingsSectionHeader}"/>
+
+            <CheckBox x:Name="NoteLayerCheck" Content="Note layer" Foreground="{DynamicResource PrimaryText}"
+                      Margin="0,0,0,8" Checked="NoteLayerCheck_Changed" Unchecked="NoteLayerCheck_Changed"
+                      ToolTip="Draw, edit and export MIDI notes over the spectrogram"/>
+
+            <TextBlock Text="Hover readout" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="HoverModeCombo" Margin="0,0,0,8" SelectionChanged="HoverModeCombo_Changed">
+              <ComboBoxItem Content="MIDI note"/>
+              <ComboBoxItem Content="Frequency"/>
+              <ComboBoxItem Content="Note + frequency"/>
+            </ComboBox>
+
+            <CheckBox x:Name="FileInfoCheck" Content="Show file info" Foreground="{DynamicResource PrimaryText}"
+                      Margin="0,0,0,8" Checked="FileInfoCheck_Changed" Unchecked="FileInfoCheck_Changed"/>
+
+            <TextBlock Text="File info style" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="FileInfoStyleCombo" SelectionChanged="FileInfoStyleCombo_Changed">
+              <ComboBoxItem Content="Icon (hover)"/>
+              <ComboBoxItem Content="Draggable box"/>
+            </ComboBox>
+
+            <!-- ===== LAYOUT: the header doubles as this group's only field label ===== -->
+            <Border Style="{StaticResource SettingsSeparator}"/>
+            <TextBlock Text="LAYOUT" Style="{StaticResource SettingsSectionHeader}"/>
+
+            <ComboBox x:Name="LayoutCombo" SelectionChanged="LayoutCombo_Changed">
+              <ComboBoxItem Content="Stacked"/>
+              <ComboBoxItem Content="Single view"/>
+            </ComboBox>
           </StackPanel>
+            </ScrollViewer>
+
+            <Thumb x:Name="SettingsResizeGrip" Grid.Row="1" Style="{StaticResource SettingsResizeGrip}"
+                   DragDelta="SettingsResizeGrip_DragDelta"
+                   DragCompleted="SettingsResizeGrip_DragCompleted"/>
+          </Grid>
         </Border>
       </Popup>
+    </Grid>
+
+    <!-- Playback timeline on its own row, aligned to the plot area via the shared
+         gutters so the seek position lines up with the waveform and spectrogram. -->
+    <Grid Grid.Row="1" Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="LeftGutter"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="RightGutter"/>
+      </Grid.ColumnDefinitions>
+      <Slider x:Name="SeekSlider" Grid.Column="1" VerticalAlignment="Center"
+              Minimum="0" Maximum="1" SmallChange="0.01" LargeChange="0.05"
+              IsMoveToPointEnabled="True"
+              Thumb.DragStarted="SeekSlider_DragStarted"
+              Thumb.DragCompleted="SeekSlider_DragCompleted"
+              ValueChanged="SeekSlider_ValueChanged"/>
     </Grid>
 
     <!-- View pane. A horizontally-scrollable timeline holds the waveform (top,
@@ -110,65 +287,211 @@
          in time; long files render in full and scroll instead of truncating.
          Single-view layout collapses the wave row to 0 and toggles one view.
          Timeline width is set in code; MinWidth keeps short files filling the pane. -->
-    <Grid Grid.Row="1" x:Name="ViewPaneGrid">
-      <ScrollViewer x:Name="ViewScroll" HorizontalScrollBarVisibility="Auto"
-                    VerticalScrollBarVisibility="Disabled"
-                    PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
-        <Grid x:Name="Timeline"
-              Height="{Binding ViewportHeight, ElementName=ViewScroll}"
-              MinWidth="{Binding ViewportWidth, ElementName=ViewScroll}">
-          <Grid.RowDefinitions>
-            <RowDefinition x:Name="WaveRow" Height="1*"/>
-            <RowDefinition x:Name="SpecRow" Height="4*"/>
-          </Grid.RowDefinitions>
+    <Grid Grid.Row="2" x:Name="ViewPaneGrid">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="LeftGutter"/>   <!-- frequency ruler -->
+        <ColumnDefinition Width="*"/>                                    <!-- content (scroll + overlays) -->
+        <ColumnDefinition Width="Auto" SharedSizeGroup="RightGutter"/>  <!-- colorbar legend -->
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*"/>         <!-- views -->
+        <RowDefinition Height="Auto"/>      <!-- time ruler -->
+      </Grid.RowDefinitions>
 
-          <ScrollViewer x:Name="WaveScroll" Grid.Row="0"
-                        VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <!-- MinHeight keeps mono/stereo waveforms stretched to fill the pane like
-                 before multichannel support; many-channel files exceed the viewport at
-                 LaneHeight-per-channel and this MinHeight has no effect, so they scroll. -->
-            <ctl:WaveformView x:Name="Waveform" MinHeight="{Binding ViewportHeight, ElementName=WaveScroll}"/>
-          </ScrollViewer>
-          <Image x:Name="SpectrogramImage" Grid.Row="1" Stretch="Fill" Visibility="Collapsed"/>
-          <Rectangle x:Name="SpectrogramPlayhead" Grid.Row="0" Grid.RowSpan="2" Width="1.5"
-                     Fill="#FFFF5252" HorizontalAlignment="Left" Visibility="Collapsed"/>
-        </Grid>
-      </ScrollViewer>
-      <TextBlock x:Name="StatusText" Foreground="#FFBBBBBB"
-                 HorizontalAlignment="Center" VerticalAlignment="Center"
-                 Text="Loading…"/>
+      <!-- Frequency axis. Same height as the views row; TopFraction (set in code)
+           aligns its ticks to the spectrogram band (0 single-view, 0.2 stacked). -->
+      <ctl:FrequencyRuler x:Name="FreqRuler" Grid.Column="0" Grid.Row="0" Width="46"
+                          Visibility="Collapsed"/>
 
-      <!-- File-info overlay (toggled from settings). Bottom-right by default;
-           draggable anywhere in the pane; a ✕ closes it. Wheel events are
-           forwarded so the timeline still scrolls when the pointer is over it. -->
-      <Border x:Name="FileInfoPanel" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-              Margin="0,0,10,10" Padding="9,6,9,7" CornerRadius="3" Background="#CC000000"
-              BorderBrush="#40FFFFFF" BorderThickness="1" Visibility="Collapsed"
-              Cursor="SizeAll"
-              MouseLeftButtonDown="FileInfoPanel_MouseLeftButtonDown"
-              MouseMove="FileInfoPanel_MouseMove"
-              MouseLeftButtonUp="FileInfoPanel_MouseLeftButtonUp"
-              PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
-        <Border.RenderTransform>
-          <TranslateTransform x:Name="FileInfoTranslate"/>
-        </Border.RenderTransform>
-        <Grid>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-          </Grid.RowDefinitions>
-          <TextBlock x:Name="FileInfoClose" Grid.Row="0" Text="&#xE8BB;"
-                     FontFamily="Segoe MDL2 Assets" FontSize="10" HorizontalAlignment="Right"
-                     Foreground="#FFCCCCCC" Cursor="Hand" Margin="0,0,0,3" ToolTip="Close"
-                     MouseLeftButtonDown="FileInfoClose_Click"/>
-          <TextBlock x:Name="FileInfoText" Grid.Row="1" Foreground="#FFEDEDED"
+      <!-- Content column: the scroll + overlays. Internals unchanged. -->
+      <Grid x:Name="ContentGrid" Grid.Column="1" Grid.Row="0" ClipToBounds="True">
+        <!-- Built-in scrollbar hidden; a dedicated one sits below the time axis (HScroll). -->
+        <ScrollViewer x:Name="ViewScroll" HorizontalScrollBarVisibility="Hidden"
+                      VerticalScrollBarVisibility="Disabled"
+                      PreviewMouseWheel="ViewScroll_PreviewMouseWheel"
+                      ScrollChanged="ViewScroll_ScrollChanged">
+          <Grid x:Name="Timeline"
+                Height="{Binding ViewportHeight, ElementName=ViewScroll}"
+                MinWidth="{Binding ViewportWidth, ElementName=ViewScroll}">
+            <Grid.RowDefinitions>
+              <RowDefinition x:Name="WaveRow" Height="1*"/>
+              <RowDefinition x:Name="SpecRow" Height="4*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Vertical scroll for many-channel lane stacks; mono/stereo fill the row via
+                 MinHeight and don't scroll. Horizontal scrolling stays with the outer
+                 ViewScroll (this scroller only handles the vertical lane overflow). -->
+            <ScrollViewer x:Name="WaveScroll" Grid.Row="0"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <ctl:WaveformView x:Name="Waveform"
+                                MinHeight="{Binding ViewportHeight, ElementName=WaveScroll}"/>
+            </ScrollViewer>
+            <Image x:Name="SpectrogramImage" Grid.Row="1" Stretch="Fill" Visibility="Collapsed"
+                   RenderOptions.BitmapScalingMode="HighQuality"
+                   MouseMove="SpectrogramImage_MouseMove" MouseLeave="SpectrogramImage_MouseLeave"/>
+            <!-- Note overlay: same cell as the spectrogram image so it scrolls with it and shares
+                 its coordinate space. Hit-testing is gated by draw mode in code (view mode = off,
+                 so the hover readout above still works). Kept above the image, below the playhead. -->
+            <ctl:NoteOverlay x:Name="Notes" Grid.Row="1" Visibility="Collapsed"/>
+            <Rectangle x:Name="SpectrogramPlayhead" Grid.Row="0" Grid.RowSpan="2" Width="1.5"
+                       Fill="{DynamicResource Playhead}" HorizontalAlignment="Left" Visibility="Collapsed"
+                       IsHitTestVisible="False"/>
+          </Grid>
+        </ScrollViewer>
+        <TextBlock x:Name="StatusText" Foreground="{DynamicResource SecondaryText}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Text="Loading…"/>
+
+        <!-- Hover readout (time · frequency · level under the cursor). -->
+        <Border x:Name="HoverReadout" HorizontalAlignment="Left" VerticalAlignment="Top"
+                Background="{DynamicResource OverlayBackground}" BorderBrush="{DynamicResource OverlayBorder}"
+                BorderThickness="1" CornerRadius="3" Padding="6,3" Visibility="Collapsed"
+                IsHitTestVisible="False">
+          <Border.RenderTransform>
+            <TranslateTransform x:Name="HoverTranslate"/>
+          </Border.RenderTransform>
+          <TextBlock x:Name="HoverText" Foreground="{DynamicResource OverlayText}"
                      FontFamily="Consolas, Courier New" FontSize="11"/>
-        </Grid>
-      </Border>
+        </Border>
+
+        <!-- File-info overlay. Two presentation modes (see PluginSettings.FileInfoDisplay):
+             HoverIcon (default) reveals this box while the InfoIcon pill is hovered and
+             auto-hides it; DraggableBox anchors it bottom-right, draggable anywhere with a
+             ✕ to dismiss and a remembered position. Wheel events are forwarded so the
+             timeline still scrolls when the pointer is over it. -->
+        <Border x:Name="FileInfoPanel" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,10,10" Padding="9,6,9,7" CornerRadius="3" Background="{DynamicResource OverlayBackground}"
+                BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed"
+                Cursor="SizeAll"
+                MouseLeftButtonDown="FileInfoPanel_MouseLeftButtonDown"
+                MouseMove="FileInfoPanel_MouseMove"
+                MouseLeftButtonUp="FileInfoPanel_MouseLeftButtonUp"
+                MouseLeave="FileInfoPanel_MouseLeave"
+                PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
+          <Border.RenderTransform>
+            <TranslateTransform x:Name="FileInfoTranslate"/>
+          </Border.RenderTransform>
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="FileInfoClose" Grid.Row="0" Text="&#xE8BB;"
+                       FontFamily="Segoe MDL2 Assets" FontSize="10" HorizontalAlignment="Right"
+                       Foreground="{DynamicResource OverlayClose}" Cursor="Hand" Margin="0,0,0,3" ToolTip="Close"
+                       MouseLeftButtonDown="FileInfoClose_Click"/>
+            <Image x:Name="AlbumArt" Grid.Row="1" MaxWidth="128" MaxHeight="128" Stretch="Uniform"
+                   HorizontalAlignment="Left" Margin="0,0,0,6" Visibility="Collapsed"
+                   RenderOptions.BitmapScalingMode="HighQuality"/>
+            <TextBlock x:Name="FileInfoText" Grid.Row="2" Foreground="{DynamicResource OverlayText}"
+                       FontFamily="Consolas, Courier New" FontSize="11"/>
+          </Grid>
+        </Border>
+
+        <!-- Info affordance for HoverIcon mode: a small pill anchored bottom-right.
+             Hovering it reveals FileInfoPanel just above; the box auto-hides on leave. -->
+        <Border x:Name="InfoIcon" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,10,10" Padding="7,3" CornerRadius="10" Background="{DynamicResource OverlayBackground}"
+                BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed"
+                Cursor="Hand" ToolTip="Click to pin"
+                MouseEnter="InfoIcon_MouseEnter" MouseLeave="InfoIcon_MouseLeave"
+                MouseLeftButtonUp="InfoIcon_Click"
+                PreviewMouseWheel="ViewScroll_PreviewMouseWheel">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                       Foreground="{DynamicResource OverlayText}" VerticalAlignment="Center"/>
+            <TextBlock Text="info" Foreground="{DynamicResource OverlayText}"
+                       FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Border>
+
+        <!-- Note-layer toolbar: a small pill in the top-left, shown only when the note layer is
+             on. The pencil toggles draw mode; the two icons export the notes (Save as MIDI…,
+             Copy notes as text). Sits outside the scroll so it stays put as the timeline scrolls. -->
+        <Border x:Name="NoteToolbar" HorizontalAlignment="Left" VerticalAlignment="Top"
+                Margin="10,10,0,0" Padding="3" CornerRadius="10" Background="{DynamicResource OverlayBackground}"
+                BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed">
+          <StackPanel Orientation="Horizontal">
+            <ToggleButton x:Name="DrawToggle" Width="27" Height="24" Padding="0" Cursor="Hand"
+                          ToolTip="Draw notes (pencil)" Click="DrawToggle_Click"
+                          Foreground="{DynamicResource OverlayText}">
+              <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                  <Border x:Name="bd" Background="Transparent" CornerRadius="8" Padding="4,2">
+                    <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{TemplateBinding Foreground}"/>
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                      <Setter TargetName="bd" Property="Background" Value="#33888888"/>
+                    </Trigger>
+                    <Trigger Property="IsChecked" Value="True">
+                      <Setter TargetName="bd" Property="Background" Value="#5522D3EE"/>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </ToggleButton.Template>
+            </ToggleButton>
+            <Button x:Name="SaveMidiButton" Style="{StaticResource NoteToolBtn}" IsEnabled="False"
+                    ToolTip="Save as MIDI…" Click="SaveMidiButton_Click">
+              <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+            </Button>
+            <Button x:Name="CopyNotesButton" Style="{StaticResource NoteToolBtn}" IsEnabled="False"
+                    ToolTip="Copy notes as text" Click="CopyNotesButton_Click">
+              <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+            </Button>
+          </StackPanel>
+        </Border>
+
+        <!-- Suggestion prompt: on a scale where semitones bunch (Linear/Mel), offer a one-click
+             switch to Log for evenly-spaced rows. Dismissible; auto-hidden on Log. -->
+        <Border x:Name="NoteSuggestion" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,10,0,0" Padding="10,5" CornerRadius="4" Background="{DynamicResource OverlayBackground}"
+                BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="Notes bunch on this scale — switch to Log for even semitone rows?"
+                       Foreground="{DynamicResource OverlayText}" VerticalAlignment="Center" FontSize="11"/>
+            <Button x:Name="NoteSuggestSwitch" Content="Switch to Log" Margin="10,0,4,0" Padding="8,2"
+                    Cursor="Hand" Click="NoteSuggestionSwitch_Click"/>
+            <Button x:Name="NoteSuggestDismiss" Style="{StaticResource NoteToolBtn}" Width="22"
+                    ToolTip="Dismiss" Click="NoteSuggestionDismiss_Click">
+              <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10"/>
+            </Button>
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- Colorbar legend. -->
+      <ctl:SpectrogramColorbar x:Name="Colorbar" Grid.Column="2" Grid.Row="0" Width="52"
+                               Margin="6,0,0,0" Visibility="Collapsed"/>
+
+      <!-- Time axis below the content column; translated to follow the shared scroll. -->
+      <Grid Grid.Column="1" Grid.Row="1" ClipToBounds="True" Height="18">
+        <ctl:TimeRuler x:Name="TimeAxis" HorizontalAlignment="Left" Visibility="Collapsed"
+                       Width="{Binding ActualWidth, ElementName=Timeline}">
+          <ctl:TimeRuler.RenderTransform>
+            <TranslateTransform x:Name="TimeRulerTranslate"/>
+          </ctl:TimeRuler.RenderTransform>
+        </ctl:TimeRuler>
+      </Grid>
     </Grid>
 
-    <!-- Channel selector (multichannel files only) + toggle button -->
-    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+    <!-- Horizontal scrollbar for long files, placed below the time axis (well clear
+         of the spectrogram) and aligned to the plot via the shared gutters. -->
+    <Grid Grid.Row="3">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="LeftGutter"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="RightGutter"/>
+      </Grid.ColumnDefinitions>
+      <ScrollBar x:Name="HScroll" Grid.Column="1" Orientation="Horizontal" Minimum="0"
+                 Margin="0,6,0,0" Visibility="Collapsed" Scroll="HScroll_Scroll"/>
+    </Grid>
+
+    <!-- Channel selector (multichannel files only) + spectrogram toggle -->
+    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
       <ComboBox x:Name="ChannelCombo" Width="140" Margin="0,0,8,0" Visibility="Collapsed"
                 VerticalAlignment="Center" SelectionChanged="ChannelCombo_Changed"/>
       <Button x:Name="SpectrogramButton" Padding="10,4" Content="Spectrogram ▸"

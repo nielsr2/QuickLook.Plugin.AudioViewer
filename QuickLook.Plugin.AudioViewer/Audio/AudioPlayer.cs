@@ -17,23 +17,31 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         public AudioPlayer(WaveStream stream)
         {
             _stream = stream ?? throw new ArgumentNullException(nameof(stream));
-            var native = _stream.ToSampleProvider();
-            _channelMix = TryWrapForPlayback(native);
-            ISampleProvider playbackSource = _channelMix ?? native;
-
-            _volume = new VolumeSampleProvider(playbackSource) { Volume = 1.0f };
-            _output = new WasapiOut(NAudio.CoreAudioApi.AudioClientShareMode.Shared, 100);
             try
             {
+                // Multichannel sources (>2ch) are downmixed to stereo for playback; mono/stereo
+                // pass through unmodified (_channelMix stays null).
+                var native = _stream.ToSampleProvider();
+                _channelMix = TryWrapForPlayback(native);
+                ISampleProvider playbackSource = _channelMix ?? native;
+
+                _volume = new VolumeSampleProvider(playbackSource) { Volume = 1.0f };
+                _output = new WasapiOut(NAudio.CoreAudioApi.AudioClientShareMode.Shared, 100);
                 _output.Init(_volume);
+                _output.PlaybackStopped += (s, e) => PlaybackStopped?.Invoke(this, EventArgs.Empty);
             }
             catch
             {
-                _output.Dispose();
+                // Ownership rule: once this constructor is called it owns the stream.
+                // WasapiOut.Init can throw (e.g. an unsupported shared-mode format), as can
+                // the mix/provider setup; on any failure dispose everything we created —
+                // including the stream — so the caller never leaks the file handle (a leaked
+                // handle keeps the file locked, blocking the user from deleting or moving it).
+                _output?.Dispose();
                 _output = null;
+                _stream.Dispose();
                 throw;
             }
-            _output.PlaybackStopped += (s, e) => PlaybackStopped?.Invoke(this, EventArgs.Empty);
         }
 
         /// <summary>
@@ -77,10 +85,13 @@ namespace QuickLook.Plugin.AudioViewer.Audio
 
         public void Seek(TimeSpan position)
         {
-            var clamped = position < TimeSpan.Zero ? TimeSpan.Zero
-                : position > _stream.TotalTime ? _stream.TotalTime : position;
-            _stream.CurrentTime = clamped;
+            _stream.CurrentTime = ClampSeek(position, _stream.TotalTime);
         }
+
+        /// <summary>Clamp a seek target into [0, total]. Pure, so it is unit-tested.</summary>
+        internal static TimeSpan ClampSeek(TimeSpan position, TimeSpan total)
+            => position < TimeSpan.Zero ? TimeSpan.Zero
+                : position > total ? total : position;
 
         public void Dispose()
         {

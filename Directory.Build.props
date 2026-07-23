@@ -1,4 +1,16 @@
 <Project>
+  <!--
+    Single source of truth for the plugin's public version. The plugin csproj
+    consumes this as <Version> (stamping AssemblyVersion/FileVersion/
+    InformationalVersion), and QuickLook.Plugin.Metadata.config carries the same
+    number for QuickLook's installer. A unit test asserts the two stay in sync.
+    This is a plain custom property, so it does not version the QuickLook.Common
+    submodule or the test project (they never reference it).
+  -->
+  <PropertyGroup>
+    <PluginVersion>1.4.0</PluginVersion>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
   </ItemGroup>

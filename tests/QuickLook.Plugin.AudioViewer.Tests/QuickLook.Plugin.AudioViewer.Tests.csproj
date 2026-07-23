@@ -19,6 +19,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\QuickLook.Plugin.AudioViewer\QuickLook.Plugin.AudioViewer.csproj" />
+    <!-- Copied to the test output so tests that touch QuickLook.Common types
+         (e.g. ThemePalette -> Themes/OSThemeHelper) can load it at runtime. -->
+    <ProjectReference Include="..\..\QuickLook.Common\QuickLook.Common.csproj" />
   </ItemGroup>
 
 </Project>
