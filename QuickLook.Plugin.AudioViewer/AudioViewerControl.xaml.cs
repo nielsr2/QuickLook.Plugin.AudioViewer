@@ -109,7 +109,14 @@ namespace QuickLook.Plugin.AudioViewer
                 ? ChannelSelection.Mix
                 : ChannelSelection.Solo(ChannelCombo.SelectedIndex - 1);
             _player?.SetChannelSelection(_channelSelection);
-            ShowSpectrogramAsync(true);
+            // Only recompute now if the spectrogram is actually visible (Stacked layout, or
+            // Single layout with the spectrogram toggled in) — _showingSpectrogram tracks
+            // that in both layouts (ApplyLayout sets it true for Stacked). Otherwise skip the
+            // full-file FFT; ShowSpectrogramAsync's own selectionChanged check forces the
+            // recompute later when the user reveals the spectrogram (SpectrogramButton_Click
+            // / switching to Stacked both call ShowSpectrogramAsync(false), which still
+            // recomputes because _spectrogramChannelSelection is now stale).
+            if (_showingSpectrogram) ShowSpectrogramAsync(true);
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -141,9 +148,24 @@ namespace QuickLook.Plugin.AudioViewer
                 StatusText.Visibility = Visibility.Collapsed;
                 InitChannelCombo(playbackStream.WaveFormat.Channels);
 
-                ApplyLayout(PluginSettings.Layout);
-                if (PluginSettings.Layout == LayoutMode.Stacked)
-                    ShowSpectrogramAsync(false);
+                // Many-channel files (>2ch) always open showing just the waveform lane
+                // stack, regardless of the persisted Layout setting: computing/showing the
+                // spectrogram immediately for e.g. a 16-channel file is expensive and rarely
+                // wanted on open. This is a per-file presentation default only — it does not
+                // read or change PluginSettings.Layout, so the setting (and the flyout's
+                // Layout combo, which still reflects it) is unaffected; SpectrogramButton
+                // still brings the spectrogram up on demand via the normal Single-layout path.
+                // Mono/stereo files keep the persisted layout exactly as before.
+                if (playbackStream.WaveFormat.Channels > 2)
+                {
+                    ApplyLayout(LayoutMode.Single);
+                }
+                else
+                {
+                    ApplyLayout(PluginSettings.Layout);
+                    if (PluginSettings.Layout == LayoutMode.Stacked)
+                        ShowSpectrogramAsync(false);
+                }
 
                 try
                 {
@@ -356,6 +378,13 @@ namespace QuickLook.Plugin.AudioViewer
         // (the ScrollViewer only scrolls horizontally, so the wheel does nothing by default).
         private void ViewScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
+            // Wheel over a vertically-scrollable lane stack (many-channel files) scrolls
+            // the lanes instead — otherwise this preview handler (which tunnels before
+            // WaveScroll's own bubbling handler ever sees the event) would swallow it for
+            // horizontal timeline scrolling and lanes below the viewport would be unreachable.
+            if (WaveScroll.IsVisible && WaveScroll.ScrollableHeight > 0 && WaveScroll.IsMouseOver)
+                return;
+
             if (ViewScroll.ScrollableWidth <= 0) return; // nothing to scroll; let it bubble
             ViewScroll.ScrollToHorizontalOffset(ViewScroll.HorizontalOffset - e.Delta);
             e.Handled = true;
