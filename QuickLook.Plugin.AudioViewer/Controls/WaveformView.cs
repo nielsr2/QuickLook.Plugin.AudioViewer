@@ -1,7 +1,9 @@
 using System;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using QuickLook.Plugin.AudioViewer.Audio;
 
 namespace QuickLook.Plugin.AudioViewer.Controls
@@ -16,13 +18,25 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         private double _playheadFraction;
         private bool _dragging;
 
-        // Cache of the (expensive) per-lane line segments, so a playhead-only invalidation
-        // (which fires every timer tick, ~30 Hz) doesn't rebuild all channels' waveforms —
-        // only rebuilt when the waveform instance or the rendered size changes.
-        private DrawingGroup _laneCache;
-        private WaveformData _laneCacheWaveform;
-        private double _laneCacheWidth;
-        private double _laneCacheHeight;
+        // The lane waveforms are rasterized off-thread into a single ARGB bitmap
+        // (1px per column, channels*lanePixelHeight tall) and blitted, replacing the
+        // former per-column DrawLine vector cache. A playhead-only invalidation
+        // (every timer tick, ~30 Hz) then just re-blits the cached bitmap plus the
+        // cheap playhead/separator vectors — no waveform re-rasterization.
+        private ImageSource _waveBitmap;
+
+        // Rebuild key: the bitmap is valid only for the WaveformData reference AND the
+        // integer lanePixelHeight it was rasterized at (width is always Columns and is
+        // stretched horizontally, so it is deliberately NOT part of the key).
+        //  - "completed" key: what the currently-held _waveBitmap was actually built for.
+        //  - "requested" key: what the most recently spawned rebuild is building for,
+        //    used to avoid spawning a duplicate rebuild every OnRender while one is
+        //    already in flight for the same key.
+        private WaveformData _bitmapWaveform;      // completed key (waveform ref)
+        private int _bitmapLanePx = -1;            // completed key (lanePixelHeight)
+        private WaveformData _requestedWaveform;   // last-requested key (waveform ref)
+        private int _requestedLanePx = -1;         // last-requested key (lanePixelHeight)
+        private int _bitmapGeneration;             // staleness guard for async completions
 
         public event Action<double> SeekRequested;
 
@@ -43,12 +57,30 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             LaneSeparatorBrush.Freeze();
             _separatorPen = new Pen(LaneSeparatorBrush, 1.0);
             _separatorPen.Freeze();
+
+            // The wave bitmap is intentionally 1px-per-column and stretched horizontally to
+            // fill; NearestNeighbor keeps the crisp per-column look of the old DrawLine
+            // rendering and avoids interpolation blur.
+            RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor);
         }
 
         public WaveformData Waveform
         {
             get => _waveform;
-            set { _waveform = value; _laneCache = null; InvalidateMeasure(); InvalidateVisual(); }
+            set
+            {
+                _waveform = value;
+                // Force a rebuild: drop the cached bitmap and both keys, and bump the
+                // generation so any in-flight rebuild for the old waveform is discarded.
+                _waveBitmap = null;
+                _bitmapWaveform = null;
+                _bitmapLanePx = -1;
+                _requestedWaveform = null;
+                _requestedLanePx = -1;
+                _bitmapGeneration++;
+                InvalidateMeasure();
+                InvalidateVisual();
+            }
         }
 
         public double PlayheadFraction
@@ -64,6 +96,12 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         }
 
         private static double Clamp01(double v) => v < 0 ? 0 : v > 1 ? 1 : v;
+
+        private static int ToArgb(Brush brush)
+        {
+            var c = ((SolidColorBrush)brush).Color;
+            return (c.A << 24) | (c.R << 16) | (c.G << 8) | c.B;
+        }
 
         // Reports one LaneHeight per channel as the desired height, so a wrapping
         // vertical ScrollViewer knows when to show a scrollbar (many-channel files)
@@ -85,66 +123,63 @@ namespace QuickLook.Plugin.AudioViewer.Controls
                 return;
             }
 
-            if (_laneCache == null || !ReferenceEquals(_laneCacheWaveform, _waveform)
-                || _laneCacheWidth != w || _laneCacheHeight != h)
+            int channels = _waveform.ChannelCount;
+            // Mono/stereo stretch to fill; >=3ch pinned at LaneHeight (DIP).
+            double laneHeightDIP = Math.Max(LaneHeight, h / channels);
+            double dpiY = VisualTreeHelper.GetDpi(this).DpiScaleY;
+            int lanePixelHeight = Math.Max(1, (int)Math.Round(laneHeightDIP * dpiY));
+
+            // Rebuild off-thread if stale: the bitmap must match the current waveform ref
+            // AND lanePixelHeight. Guard on the last-requested key so we don't spawn a
+            // duplicate rebuild every OnRender while one is already in flight for this key.
+            if (!ReferenceEquals(_requestedWaveform, _waveform) || _requestedLanePx != lanePixelHeight)
             {
-                _laneCache = BuildLaneDrawing(w, h);
-                _laneCacheWaveform = _waveform;
-                _laneCacheWidth = w;
-                _laneCacheHeight = h;
+                _requestedWaveform = _waveform;
+                _requestedLanePx = lanePixelHeight;
+
+                int gen = ++_bitmapGeneration;
+                var wf = _waveform;
+                int lph = lanePixelHeight;
+                int waveArgb = ToArgb(WaveBrush);
+                int bgArgb = ToArgb(BackgroundBrush);
+
+                Task.Run(() =>
+                {
+                    var px = WaveformRasterizer.RenderPixels(wf, lph, waveArgb, bgArgb);
+                    var bmp = WaveformRasterizer.ToBitmap(px, wf.Columns, wf.ChannelCount * lph);
+                    bmp.Freeze();
+                    Dispatcher.BeginInvoke((Action)(() =>
+                    {
+                        if (gen != _bitmapGeneration) return; // a newer rebuild superseded this one
+                        _waveBitmap = bmp;
+                        _bitmapWaveform = wf;   // record the key this bitmap was built for
+                        _bitmapLanePx = lph;
+                        InvalidateVisual();
+                    }));
+                });
             }
 
-            dc.DrawDrawing(_laneCache);
-
-            double px = _playheadFraction * w;
-            var ph = new Pen(PlayheadBrush, 1.5);
-            ph.Freeze();
-            dc.DrawLine(ph, new Point(px, 0), new Point(px, h));
-        }
-
-        /// <summary>Builds the (expensive, per-column) background + lane waveforms into a
-        /// cacheable <see cref="DrawingGroup"/>, so repeated renders (e.g. the playhead
-        /// moving every timer tick) only redraw the cheap playhead line on top of it.</summary>
-        private DrawingGroup BuildLaneDrawing(double w, double h)
-        {
-            var group = new DrawingGroup();
-            using (var dc = group.Open())
-            {
+            if (_waveBitmap != null)
+                // Stretches the Columns x (channels*lanePixelHeight) bitmap to fill the control.
+                dc.DrawImage(_waveBitmap, new Rect(0, 0, w, h));
+            else
                 dc.DrawRectangle(BackgroundBrush, null, new Rect(0, 0, w, h));
 
-                int channels = _waveform.ChannelCount;
-                int cols = _waveform.Columns;
-                double laneHeight = Math.Max(LaneHeight, h / channels);
-                var pen = new Pen(WaveBrush, Math.Max(1.0, w / cols));
-                pen.Freeze();
-
-                for (int ch = 0; ch < channels; ch++)
+            // Lane separators drawn as crisp vectors on top (kept OUT of the bitmap so they
+            // stay 1px regardless of the horizontal stretch), between adjacent lanes only.
+            if (channels > 1)
+            {
+                for (int ch = 1; ch < channels; ch++)
                 {
-                    double mid = ch * laneHeight + laneHeight / 2.0;
-                    var min = _waveform.Min[ch];
-                    var max = _waveform.Max[ch];
-                    for (int i = 0; i < cols; i++)
-                    {
-                        double x = (i + 0.5) / cols * w;
-                        double yTop = mid - max[i] * (laneHeight / 2.0);
-                        double yBot = mid - min[i] * (laneHeight / 2.0);
-                        dc.DrawLine(pen, new Point(x, yTop), new Point(x, yBot));
-                    }
-                }
-
-                // Boundary lines between lanes only (channels - 1 of them) — never above
-                // the first lane or below the last.
-                if (channels > 1)
-                {
-                    for (int ch = 1; ch < channels; ch++)
-                    {
-                        double y = ch * laneHeight;
-                        dc.DrawLine(_separatorPen, new Point(0, y), new Point(w, y));
-                    }
+                    double y = ch * laneHeightDIP;
+                    dc.DrawLine(_separatorPen, new Point(0, y), new Point(w, y));
                 }
             }
-            if (group.CanFreeze) group.Freeze();
-            return group;
+
+            double px2 = _playheadFraction * w;
+            var ph = new Pen(PlayheadBrush, 1.5);
+            ph.Freeze();
+            dc.DrawLine(ph, new Point(px2, 0), new Point(px2, h));
         }
 
         protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
