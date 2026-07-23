@@ -23,7 +23,16 @@ namespace QuickLook.Plugin.AudioViewer.Audio
 
             _volume = new VolumeSampleProvider(playbackSource) { Volume = 1.0f };
             _output = new WasapiOut(NAudio.CoreAudioApi.AudioClientShareMode.Shared, 100);
-            _output.Init(_volume);
+            try
+            {
+                _output.Init(_volume);
+            }
+            catch
+            {
+                _output.Dispose();
+                _output = null;
+                throw;
+            }
             _output.PlaybackStopped += (s, e) => PlaybackStopped?.Invoke(this, EventArgs.Empty);
         }
 
