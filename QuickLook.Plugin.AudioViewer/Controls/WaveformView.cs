@@ -49,6 +49,7 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         // background but well below the wave color so it doesn't compete for attention.
         public Brush LaneSeparatorBrush { get; set; } = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40));
         private readonly Pen _separatorPen;
+        private readonly Pen _playheadPen;
 
         public WaveformView()
         {
@@ -57,6 +58,10 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             LaneSeparatorBrush.Freeze();
             _separatorPen = new Pen(LaneSeparatorBrush, 1.0);
             _separatorPen.Freeze();
+            // Built once (not per-render): the playhead invalidates ~30 Hz, so re-allocating
+            // and freezing a Pen every tick was pure churn.
+            _playheadPen = new Pen(PlayheadBrush, 1.5);
+            _playheadPen.Freeze();
 
             // The wave bitmap is intentionally 1px-per-column and stretched horizontally to
             // fill; NearestNeighbor keeps the crisp per-column look of the old DrawLine
@@ -177,9 +182,7 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             }
 
             double px2 = _playheadFraction * w;
-            var ph = new Pen(PlayheadBrush, 1.5);
-            ph.Freeze();
-            dc.DrawLine(ph, new Point(px2, 0), new Point(px2, h));
+            dc.DrawLine(_playheadPen, new Point(px2, 0), new Point(px2, h));
         }
 
         protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)

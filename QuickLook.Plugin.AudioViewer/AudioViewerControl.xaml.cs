@@ -278,7 +278,11 @@ namespace QuickLook.Plugin.AudioViewer
         private void UpdateTimeText()
         {
             if (_player == null) return;
-            TimeText.Text = $"{Fmt(_player.Position)} / {Fmt(_player.Duration)}";
+            // Called every ~33ms timer tick; the string only changes about once a second
+            // (seconds resolution), so skip the property write when it's identical to avoid
+            // needless TextBlock invalidation.
+            string text = $"{Fmt(_player.Position)} / {Fmt(_player.Duration)}";
+            if (TimeText.Text != text) TimeText.Text = text;
         }
 
         private static string Fmt(TimeSpan t) => $"{(int)t.TotalMinutes:00}:{t.Seconds:00}";
