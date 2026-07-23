@@ -227,10 +227,6 @@
             <Border Style="{StaticResource SettingsSeparator}"/>
             <TextBlock Text="OVERLAYS" Style="{StaticResource SettingsSectionHeader}"/>
 
-            <CheckBox x:Name="NoteLayerCheck" Content="Note layer" Foreground="{DynamicResource PrimaryText}"
-                      Margin="0,0,0,8" Checked="NoteLayerCheck_Changed" Unchecked="NoteLayerCheck_Changed"
-                      ToolTip="Draw, edit and export MIDI notes over the spectrogram"/>
-
             <TextBlock Text="Hover readout" Style="{StaticResource SettingsFieldLabel}"/>
             <ComboBox x:Name="HoverModeCombo" Margin="0,0,0,8" SelectionChanged="HoverModeCombo_Changed">
               <ComboBoxItem Content="MIDI note"/>
@@ -255,6 +251,17 @@
               <ComboBoxItem Content="Stacked"/>
               <ComboBoxItem Content="Single view"/>
             </ComboBox>
+
+            <!-- ===== EXPERIMENTAL: off by default; the user must opt in here ===== -->
+            <Border Style="{StaticResource SettingsSeparator}"/>
+            <TextBlock Text="EXPERIMENTAL" Style="{StaticResource SettingsSectionHeader}"/>
+
+            <CheckBox x:Name="NoteLayerCheck" Content="Note overlay (experimental)"
+                      Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,4"
+                      Checked="NoteLayerCheck_Changed" Unchecked="NoteLayerCheck_Changed"
+                      ToolTip="Draw, edit and export MIDI notes over the spectrogram"/>
+            <TextBlock Text="Draw, edit and export MIDI notes over the spectrogram. Rough edges — opt in."
+                       Style="{StaticResource SettingsFieldLabel}" TextWrapping="Wrap" Margin="0,0,0,8"/>
           </StackPanel>
             </ScrollViewer>
 
