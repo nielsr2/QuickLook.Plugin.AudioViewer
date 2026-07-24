@@ -185,6 +185,113 @@ namespace QuickLook.Plugin.AudioViewer.Tests
             }
         }
 
+        // ---- Stereo mono-mix envelope (CombinedMin/Max) tests ----
+
+        [Fact]
+        public void Compute_Stereo_CombinedIsMonoAverage_Float()
+        {
+            AssertStereoCombinedIsMonoAverage(
+                TestSignals.WriteMultiToneWav(Path.GetTempPath(), 44100, 0.5, new[] { 1.0, 0.5 }));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Compute_Stereo_CombinedIsMonoAverage_Pcm16(bool extensible)
+        {
+            AssertStereoCombinedIsMonoAverage(
+                TestSignals.WriteMultiToneWavPcm16(Path.GetTempPath(), 44100, 0.5, new[] { 1.0, 0.5 },
+                    extensible: extensible));
+        }
+
+        private static void AssertStereoCombinedIsMonoAverage(string wav)
+        {
+            try
+            {
+                using (var stream = AudioReaderFactory.Create(wav))
+                {
+                    var wf = WaveformData.Compute(stream, columns: 200);
+                    Assert.Equal(2, wf.ChannelCount);
+                    Assert.NotNull(wf.CombinedMin);
+                    Assert.NotNull(wf.CombinedMax);
+
+                    // L at 1.0, R at 0.5, in phase: the (L+R)/2 mono peak is 0.75 — distinctly
+                    // below the ~1.0 a peak-union would show, confirming this is the average.
+                    Assert.InRange(MaxOf(wf.CombinedMax), 0.73f, 0.77f);
+                    Assert.InRange(MinOf(wf.CombinedMin), -0.77f, -0.73f);
+                }
+            }
+            finally { File.Delete(wav); }
+        }
+
+        [Fact]
+        public void Compute_Mono_HasNoCombinedEnvelope()
+        {
+            var wav = TestSignals.WriteSineWav(Path.GetTempPath(), seconds: 0.3, amplitude: 1.0, channels: 1);
+            try
+            {
+                using (var stream = AudioReaderFactory.Create(wav))
+                {
+                    var wf = WaveformData.Compute(stream, columns: 100);
+                    Assert.Null(wf.CombinedMin);
+                    Assert.Null(wf.CombinedMax);
+                }
+            }
+            finally { File.Delete(wav); }
+        }
+
+        [Fact]
+        public void Compute_ThreeChannel_HasNoCombinedEnvelope()
+        {
+            var wav = TestSignals.WriteMultiToneWav(Path.GetTempPath(), 44100, 0.3, new[] { 1.0, 0.5, 0.25 });
+            try
+            {
+                using (var stream = AudioReaderFactory.Create(wav))
+                {
+                    var wf = WaveformData.Compute(stream, columns: 100);
+                    Assert.Equal(3, wf.ChannelCount);
+                    Assert.Null(wf.CombinedMin);
+                    Assert.Null(wf.CombinedMax);
+                }
+            }
+            finally { File.Delete(wav); }
+        }
+
+        [Fact]
+        public void Compute_StereoCombined_Pcm16VsFloat_MatchWithinQuantizationTolerance()
+        {
+            const double tolerance = 2.0 / 32768.0; // mono mixes two channels' quantization
+            var floatWav = TestSignals.WriteMultiToneWav(Path.GetTempPath(), 44100, 0.5, new[] { 1.0, 0.5 });
+            var pcm16Wav = TestSignals.WriteMultiToneWavPcm16(Path.GetTempPath(), 44100, 0.5, new[] { 1.0, 0.5 });
+            try
+            {
+                WaveformData floatWf, pcm16Wf;
+                using (var stream = AudioReaderFactory.Create(floatWav))
+                    floatWf = WaveformData.Compute(stream, columns: 300);
+                using (var stream = AudioReaderFactory.Create(pcm16Wav))
+                    pcm16Wf = WaveformData.Compute(stream, columns: 300);
+
+                Assert.Equal(floatWf.Columns, pcm16Wf.Columns);
+                for (int col = 0; col < floatWf.Columns; col++)
+                {
+                    Assert.InRange(pcm16Wf.CombinedMax[col] - floatWf.CombinedMax[col], -tolerance, tolerance);
+                    Assert.InRange(pcm16Wf.CombinedMin[col] - floatWf.CombinedMin[col], -tolerance, tolerance);
+                }
+            }
+            finally
+            {
+                File.Delete(floatWav);
+                File.Delete(pcm16Wav);
+            }
+        }
+
+        private static float MinOf(float[] values)
+        {
+            float m = float.MaxValue;
+            foreach (var v in values) if (v < m) m = v;
+            return m;
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]

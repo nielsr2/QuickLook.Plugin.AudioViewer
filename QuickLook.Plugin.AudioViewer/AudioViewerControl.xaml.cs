@@ -42,6 +42,11 @@ namespace QuickLook.Plugin.AudioViewer
         private HwndSource _hwndSource;
         private const int WM_MOUSEHWHEEL = 0x020E;
 
+        // Raw per-channel scan result (source of truth). The stereo display-mode transform is
+        // applied on top of this when feeding WaveformView, so switching modes is instant with
+        // no re-scan. Progressive snapshots overwrite it as the scan fills in.
+        private WaveformData _waveformData;
+
         // Cached linear STFT frames so setting changes re-render without re-running
         // the FFT; only an FFT-size change forces a recompute.
         private float[][] _spectrogramFrames;
@@ -144,6 +149,7 @@ namespace QuickLook.Plugin.AudioViewer
             HoverModeCombo.SelectedIndex = (int)PluginSettings.HoverReadoutMode;
             NoteLayerCheck.IsChecked = PluginSettings.NoteLayerEnabled;
             LayoutCombo.SelectedIndex = (int)PluginSettings.Layout;
+            StereoModeCombo.SelectedIndex = (int)PluginSettings.StereoMode;
             FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
             AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
             ColorCombo.SelectedIndex = (int)PluginSettings.Colormap;
@@ -353,7 +359,8 @@ namespace QuickLook.Plugin.AudioViewer
                                         snapshotPending = false;
                                         if (waveformFinalized) return; // final already shown; never regress
                                         if (_unloaded) return;         // unloaded mid-scan; don't touch UI
-                                        Waveform.Waveform = snapshot;
+                                        _waveformData = snapshot;
+                                        RefreshWaveformForMode();
                                     }));
                                 },
                                 token: token);
@@ -361,7 +368,8 @@ namespace QuickLook.Plugin.AudioViewer
 
                     if (_unloaded || token.IsCancellationRequested) return;
                     waveformFinalized = true;
-                    Waveform.Waveform = result;
+                    _waveformData = result;
+                    RefreshWaveformForMode();
                     // Only collapse the status line if it still shows our Phase-1 message — the
                     // Stacked spectrogram path may have replaced it with its own status.
                     if (StatusText.Text == "Analyzing waveform…")
@@ -728,6 +736,21 @@ namespace QuickLook.Plugin.AudioViewer
             PluginSettings.Layout = mode;
             ApplyLayout(mode);
             if (mode == LayoutMode.Stacked) ShowSpectrogramAsync(false);
+        }
+
+        private void StereoModeCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || StereoModeCombo.SelectedIndex < 0) return;
+            PluginSettings.StereoMode = (StereoWaveformMode)StereoModeCombo.SelectedIndex;
+            RefreshWaveformForMode(); // instant re-collapse of the stored scan; no re-read
+        }
+
+        /// <summary>Feeds WaveformView the current scan run through the stereo display-mode
+        /// transform. A no-op until the first scan (snapshot or final) has populated the data.</summary>
+        private void RefreshWaveformForMode()
+        {
+            if (_waveformData == null) return;
+            Waveform.Waveform = StereoWaveform.Apply(_waveformData, PluginSettings.StereoMode);
         }
 
         private void FreqCombo_Changed(object sender, SelectionChangedEventArgs e)

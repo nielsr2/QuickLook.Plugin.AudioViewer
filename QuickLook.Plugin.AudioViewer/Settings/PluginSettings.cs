@@ -89,6 +89,14 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("FileInfoDisplay", value.ToString(), Domain);
         }
 
+        /// <summary>How a stereo file's waveform is drawn: two lanes, mono-average (default), or peak-union.
+        /// Named differently from its enum type to avoid the "Color Color" resolution ambiguity.</summary>
+        public static StereoWaveformMode StereoMode
+        {
+            get => ParseEnum("StereoMode", StereoWaveformMode.MonoAverage);
+            set => SettingHelper.Set("StereoMode", value.ToString(), Domain);
+        }
+
         /// <summary>Spectrogram hover readout: nearest MIDI note, raw frequency, or both (default).</summary>
         public static HoverReadoutMode HoverReadoutMode
         {

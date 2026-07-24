@@ -47,6 +47,22 @@ namespace QuickLook.Plugin.AudioViewer.Settings
         DraggableBox
     }
 
+    /// <summary>How a stereo (2-channel) file's waveform is presented.</summary>
+    /// <remarks>
+    /// Members are appended, never reordered: the settings combo casts its SelectedIndex
+    /// straight to this enum, so the XAML item order must stay in lockstep. Applies to
+    /// stereo only; mono and 3+‑channel files ignore it and always render per-channel lanes.
+    /// </remarks>
+    public enum StereoWaveformMode
+    {
+        /// <summary>Two stacked lanes, one per channel (L over R).</summary>
+        Split,
+        /// <summary>One lane from the sample-exact (L+R)/2 mono mix — the classic pre-split look (default).</summary>
+        MonoAverage,
+        /// <summary>One lane; per column, min of both mins and max of both maxes. Never hides a peak.</summary>
+        PeakUnion
+    }
+
     /// <summary>What the middle term of the spectrogram hover readout shows.</summary>
     /// <remarks>
     /// Members are appended, never reordered: the settings combo casts its SelectedIndex

@@ -243,6 +243,19 @@
               <ComboBoxItem Content="Draggable box"/>
             </ComboBox>
 
+            <!-- ===== WAVEFORM: how a stereo file's waveform is drawn (stereo only) ===== -->
+            <Border Style="{StaticResource SettingsSeparator}"/>
+            <TextBlock Text="WAVEFORM" Style="{StaticResource SettingsSectionHeader}"/>
+
+            <TextBlock Text="Stereo display" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="StereoModeCombo" SelectionChanged="StereoModeCombo_Changed">
+              <ComboBoxItem Content="Two lanes (split)"/>
+              <ComboBoxItem Content="Combined — mono average"/>
+              <ComboBoxItem Content="Combined — peak union"/>
+            </ComboBox>
+            <TextBlock Text="Applies to stereo files. Mono and multichannel always show one lane per channel."
+                       Style="{StaticResource SettingsFieldLabel}" TextWrapping="Wrap" Margin="0,2,0,8"/>
+
             <!-- ===== LAYOUT: the header doubles as this group's only field label ===== -->
             <Border Style="{StaticResource SettingsSeparator}"/>
             <TextBlock Text="LAYOUT" Style="{StaticResource SettingsSectionHeader}"/>

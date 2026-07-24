@@ -15,14 +15,30 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         public float[][] Min { get; }
         /// <summary>Indexed [channel][column].</summary>
         public float[][] Max { get; }
+
+        /// <summary>Per-column min/max of the sample-exact (L+R)/2 mono mix, populated ONLY for
+        /// stereo (2-channel) input; null otherwise. Feeds the "combined — mono average" stereo
+        /// display mode, which cannot be reconstructed from the per-channel peaks above.</summary>
+        public float[] CombinedMin { get; }
+        public float[] CombinedMax { get; }
+
         public int ChannelCount => Min.Length;
         public int Columns => Min.Length > 0 ? Min[0].Length : 0;
 
-        private WaveformData(float[][] min, float[][] max)
+        private WaveformData(float[][] min, float[][] max, float[] combinedMin = null, float[] combinedMax = null)
         {
             Min = min;
             Max = max;
+            CombinedMin = combinedMin;
+            CombinedMax = combinedMax;
         }
+
+        /// <summary>Builds a WaveformData directly from prepared arrays — used by the stereo
+        /// combine transform (<see cref="StereoWaveform"/>) and by tests. Keeps the primary
+        /// constructor private so the streaming scan stays the only producer of raw scans.</summary>
+        public static WaveformData FromChannels(float[][] min, float[][] max,
+            float[] combinedMin = null, float[] combinedMax = null)
+            => new WaveformData(min, max, combinedMin, combinedMax);
 
         public static WaveformData Compute(WaveStream stream, int columns = 2000,
             CancellationToken token = default)
@@ -51,7 +67,8 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         /// Deep-copies the current per-channel Min/Max accumulator arrays into a fresh, fully
         /// independent WaveformData — later mutation of the source arrays cannot alter it.
         /// </summary>
-        private static WaveformData Snapshot(float[][] min, float[][] max)
+        private static WaveformData Snapshot(float[][] min, float[][] max,
+            float[] combinedMin, float[] combinedMax)
         {
             int channels = min.Length;
             var mn = new float[channels][];
@@ -64,7 +81,19 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                 Array.Copy(min[c], mn[c], cols);
                 Array.Copy(max[c], mx[c], cols);
             }
-            return new WaveformData(mn, mx);
+
+            // Carry the stereo mono-mix envelope so mono-average snapshots aren't blank
+            // mid-scan; null (mono / multichannel) stays null.
+            float[] cMin = null, cMax = null;
+            if (combinedMin != null)
+            {
+                int cols = combinedMin.Length;
+                cMin = new float[cols];
+                cMax = new float[cols];
+                Array.Copy(combinedMin, cMin, cols);
+                Array.Copy(combinedMax, cMax, cols);
+            }
+            return new WaveformData(mn, mx, cMin, cMax);
         }
 
         /// <summary>
@@ -137,6 +166,14 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             var maxAcc = new short[channels];
             ResetPcm16Accumulators(minAcc, maxAcc);
 
+            // Stereo only: also build the sample-exact (L+R)/2 mono envelope in this same pass
+            // (it can't be derived from the per-channel peaks). Accumulated in float to match the
+            // generic float path; flushed alongside the per-channel columns.
+            bool stereo = channels == 2;
+            float[] combinedMin = stereo ? new float[columns] : null;
+            float[] combinedMax = stereo ? new float[columns] : null;
+            float monoMinAcc = float.MaxValue, monoMaxAcc = float.MinValue;
+
             var buffer = new byte[bytesPerFrame * 4096];
             int remainderBytes = 0;
 
@@ -160,6 +197,14 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                         if (v > maxAcc[c]) maxAcc[c] = v;
                         if (v < minAcc[c]) minAcc[c] = v;
                     }
+                    if (stereo)
+                    {
+                        short s0 = (short)(buffer[offset] | (buffer[offset + 1] << 8));
+                        short s1 = (short)(buffer[offset + 2] | (buffer[offset + 3] << 8));
+                        float mono = (s0 + s1) * (0.5f / 32768f);
+                        if (mono > monoMaxAcc) monoMaxAcc = mono;
+                        if (mono < monoMinAcc) monoMinAcc = mono;
+                    }
                     framesInColumn++;
 
                     if (col < columns - 1)
@@ -168,6 +213,13 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                         if (framesLeftInColumn == 0)
                         {
                             FlushPcm16Column(min, max, minAcc, maxAcc, channels, col, framesInColumn);
+                            if (stereo)
+                            {
+                                combinedMin[col] = monoMinAcc;
+                                combinedMax[col] = monoMaxAcc;
+                                monoMinAcc = float.MaxValue;
+                                monoMaxAcc = float.MinValue;
+                            }
                             col++;
                             framesLeftInColumn = framesPerColumn;
                             framesInColumn = 0;
@@ -181,7 +233,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                             && progressFired < progressSteps - 1
                             && framesProcessed < totalFrames)
                         {
-                            onProgress(Snapshot(min, max));
+                            onProgress(Snapshot(min, max, combinedMin, combinedMax));
                             progressFired++;
                             nextProgressAt += progressInterval;
                         }
@@ -194,11 +246,16 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             }
 
             FlushPcm16Column(min, max, minAcc, maxAcc, channels, col, framesInColumn);
+            if (stereo && framesInColumn > 0)
+            {
+                combinedMin[col] = monoMinAcc;
+                combinedMax[col] = monoMaxAcc;
+            }
 
             // Final snapshot: equals the returned result, and is the last snapshot delivered.
-            if (doProgress) onProgress(Snapshot(min, max));
+            if (doProgress) onProgress(Snapshot(min, max, combinedMin, combinedMax));
 
-            return new WaveformData(min, max);
+            return new WaveformData(min, max, combinedMin, combinedMax);
         }
 
         private static void ResetPcm16Accumulators(short[] minAcc, short[] maxAcc)
@@ -261,6 +318,13 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             var maxAcc = new float[channels];
             ResetFloatAccumulators(minAcc, maxAcc);
 
+            // Stereo only: build the sample-exact (L+R)/2 mono envelope in the same pass; see
+            // ComputePcm16 for the rationale.
+            bool stereo = channels == 2;
+            float[] combinedMin = stereo ? new float[columns] : null;
+            float[] combinedMax = stereo ? new float[columns] : null;
+            float monoMinAcc = float.MaxValue, monoMaxAcc = float.MinValue;
+
             var buffer = new float[channels * 4096];
             int col = 0;
             long framesLeftInColumn = framesPerColumn;
@@ -278,6 +342,12 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                         if (v > maxAcc[c]) maxAcc[c] = v;
                         if (v < minAcc[c]) minAcc[c] = v;
                     }
+                    if (stereo)
+                    {
+                        float mono = (buffer[i] + buffer[i + 1]) * 0.5f;
+                        if (mono > monoMaxAcc) monoMaxAcc = mono;
+                        if (mono < monoMinAcc) monoMinAcc = mono;
+                    }
                     framesInColumn++;
 
                     if (col < columns - 1)
@@ -286,6 +356,13 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                         if (framesLeftInColumn == 0)
                         {
                             FlushFloatColumn(min, max, minAcc, maxAcc, channels, col, framesInColumn);
+                            if (stereo)
+                            {
+                                combinedMin[col] = monoMinAcc;
+                                combinedMax[col] = monoMaxAcc;
+                                monoMinAcc = float.MaxValue;
+                                monoMaxAcc = float.MinValue;
+                            }
                             col++;
                             framesLeftInColumn = framesPerColumn;
                             framesInColumn = 0;
@@ -299,7 +376,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                             && progressFired < progressSteps - 1
                             && framesProcessed < totalFrames)
                         {
-                            onProgress(Snapshot(min, max));
+                            onProgress(Snapshot(min, max, combinedMin, combinedMax));
                             progressFired++;
                             nextProgressAt += progressInterval;
                         }
@@ -308,11 +385,16 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             }
 
             FlushFloatColumn(min, max, minAcc, maxAcc, channels, col, framesInColumn);
+            if (stereo && framesInColumn > 0)
+            {
+                combinedMin[col] = monoMinAcc;
+                combinedMax[col] = monoMaxAcc;
+            }
 
             // Final snapshot: equals the returned result, and is the last snapshot delivered.
-            if (doProgress) onProgress(Snapshot(min, max));
+            if (doProgress) onProgress(Snapshot(min, max, combinedMin, combinedMax));
 
-            return new WaveformData(min, max);
+            return new WaveformData(min, max, combinedMin, combinedMax);
         }
 
         private static void ResetFloatAccumulators(float[] minAcc, float[] maxAcc)
