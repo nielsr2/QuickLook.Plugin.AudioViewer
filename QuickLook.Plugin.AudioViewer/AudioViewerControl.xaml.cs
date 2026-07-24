@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using NAudio.Wave;
@@ -34,6 +35,12 @@ namespace QuickLook.Plugin.AudioViewer
         // dead control or leak the audio player / file handle / timer.
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private bool _unloaded;
+
+        // Trackpad horizontal scroll: WPF never surfaces WM_MOUSEHWHEEL as a routed
+        // event, so a two-finger horizontal swipe is caught via a top-level window hook
+        // and turned into a horizontal timeline scroll. Mirrors the XdfViewer plugin.
+        private HwndSource _hwndSource;
+        private const int WM_MOUSEHWHEEL = 0x020E;
 
         // Cached linear STFT frames so setting changes re-render without re-running
         // the FFT; only an FFT-size change forces a recompute.
@@ -221,6 +228,12 @@ namespace QuickLook.Plugin.AudioViewer
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             Loaded -= OnLoaded;
+
+            // The control is now attached to a presentation source, so hook the top-level
+            // window for horizontal-wheel (trackpad) messages. Removed in Unload().
+            _hwndSource = PresentationSource.FromVisual(this) as HwndSource;
+            _hwndSource?.AddHook(WndHook);
+
             var token = _cts.Token;
             WaveStream playbackStream = null;
             bool playerCtorInvoked = false; // once true, AudioPlayer owns/disposes the stream
@@ -789,6 +802,30 @@ namespace QuickLook.Plugin.AudioViewer
             e.Handled = true;
         }
 
+        // Two-finger horizontal trackpad swipe. WPF drops WM_MOUSEHWHEEL, so we read it
+        // straight off the window and scroll the timeline. Swipe right (delta > 0) moves
+        // the window forward in time — matching the XdfViewer plugin, and consistent with
+        // the vertical-wheel handler above (scroll up = toward the start).
+        private IntPtr WndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg != WM_MOUSEHWHEEL || _unloaded) return IntPtr.Zero;
+
+            long w = IntPtr.Size == 8 ? wParam.ToInt64() : (uint)wParam.ToInt32();
+            int delta = (short)((w >> 16) & 0xFFFF);
+            if (delta == 0) return IntPtr.Zero;
+
+            // Only act when the timeline is visible, actually scrollable, and the pointer is
+            // over it (DPI-safe via WPF hit coordinates rather than raw Win32 points).
+            if (!ViewScroll.IsVisible || ViewScroll.ScrollableWidth <= 0) return IntPtr.Zero;
+            var p = Mouse.GetPosition(ViewScroll);
+            if (p.X < 0 || p.Y < 0 || p.X > ViewScroll.ActualWidth || p.Y > ViewScroll.ActualHeight)
+                return IntPtr.Zero;
+
+            ViewScroll.ScrollToHorizontalOffset(ViewScroll.HorizontalOffset + delta);
+            handled = true;
+            return IntPtr.Zero;
+        }
+
         private void SpectrogramButton_Click(object sender, RoutedEventArgs e)
         {
             // Single-view layout only: toggle which view fills the pane.
@@ -1298,6 +1335,7 @@ namespace QuickLook.Plugin.AudioViewer
         public void Unload()
         {
             _unloaded = true;   // stop every in-flight async continuation from touching the control
+            if (_hwndSource != null) { _hwndSource.RemoveHook(WndHook); _hwndSource = null; }
             _cts.Cancel();      // abort in-flight decode/FFT so it doesn't run on a dead control
             _timer?.Stop();
             _player?.Dispose(); // disposes the WASAPI output and releases the file handle
