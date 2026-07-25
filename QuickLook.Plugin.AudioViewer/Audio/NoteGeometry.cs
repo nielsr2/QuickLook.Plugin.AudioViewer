@@ -22,12 +22,16 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         public static double XToTime(double x, double width, double durationSeconds)
             => width <= 0 ? 0 : Clamp01(x / width) * durationSeconds;
 
-        /// <summary>y pixel -> nearest MIDI note under the current vertical scale.</summary>
+        /// <summary>y pixel -> nearest MIDI note under the current vertical scale, always in [0,127].</summary>
         public static int YToMidi(double y, FrequencyScale scale, double fMin, double fMax, double height)
         {
             double frac = height <= 0 ? 0 : Clamp01(1.0 - y / height); // y=0 (top) is the highest frequency
             double freq = FrequencyScaleMapper.FractionToFrequency(frac, scale, fMin, fMax);
-            return MidiNote.NearestNoteNumber(freq);
+            // Linear/Mel put fMin at 0 Hz, so the very bottom row maps to 0 Hz and
+            // NearestNoteNumber signals "no pitch" with -1. A note must still carry a
+            // valid MIDI number (NoteName indexes by it), so pin the bottom to MIDI 0.
+            int midi = MidiNote.NearestNoteNumber(freq);
+            return midi < 0 ? 0 : midi;
         }
 
         /// <summary>Center y pixel of a MIDI note under the current vertical scale.</summary>

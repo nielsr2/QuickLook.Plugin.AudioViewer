@@ -38,6 +38,24 @@ namespace QuickLook.Plugin.AudioViewer.Tests
         [InlineData(FrequencyScale.Linear)]
         [InlineData(FrequencyScale.Log)]
         [InlineData(FrequencyScale.Mel)]
+        public void YToMidi_AtOrBelowTheBottomEdge_StaysNameable(FrequencyScale scale)
+        {
+            // Linear/Mel put fMin at 0 Hz, so the bottom row is 0 Hz: the raw
+            // NearestNoteNumber contract returns -1 there, which would blow up NoteName.
+            double fMin = FrequencyScaleMapper.EffectiveFMin(scale, 1024, 44100);
+            double fMax = 8000, height = 512;
+            foreach (double y in new[] { height, height - 0.25, height + 40 })
+            {
+                int midi = NoteGeometry.YToMidi(y, scale, fMin, fMax, height);
+                Assert.InRange(midi, 0, 127);
+                Assert.False(string.IsNullOrEmpty(MidiNote.NoteName(midi)));
+            }
+        }
+
+        [Theory]
+        [InlineData(FrequencyScale.Linear)]
+        [InlineData(FrequencyScale.Log)]
+        [InlineData(FrequencyScale.Mel)]
         public void NoteYBounds_TopAboveBottom_AndContainsCenter(FrequencyScale scale)
         {
             double fMin = FrequencyScaleMapper.EffectiveFMin(scale, 1024, 44100);

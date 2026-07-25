@@ -24,6 +24,10 @@ namespace QuickLook.Plugin.AudioViewer
         private readonly string _path;
         private readonly ContextObject _context;
         private AudioPlayer _player;
+        // File duration, read from the stream before the AudioPlayer ctor takes ownership.
+        // The spectrogram/note timeline uses this rather than _player.Duration so it still
+        // works when playback init fails (e.g. WASAPI rejects the channel layout).
+        private double _durationSeconds;
         private DispatcherTimer _timer;
         private bool _scrubbing;
         private bool _showingSpectrogram;
@@ -1030,6 +1034,7 @@ namespace QuickLook.Plugin.AudioViewer
         /// <summary>Set the scrollable timeline width from the file duration.</summary>
         private void SetTimelineWidth(double seconds)
         {
+            _durationSeconds = seconds;
             double w = seconds * TimelinePxPerSec;
             if (w > MaxTimelineColumns) w = MaxTimelineColumns;
             if (w < 1) w = 1;
@@ -1100,7 +1105,7 @@ namespace QuickLook.Plugin.AudioViewer
                 var scale = PluginSettings.FreqScale;
                 double fMin = FrequencyScaleMapper.EffectiveFMin(scale, _spectrogramFftSize, _spectrogramSampleRate);
                 double fMax = FrequencyScaleMapper.EffectiveFMax(_spectrogramSampleRate, PluginSettings.MaxFrequencyHz);
-                Notes.Configure(scale, fMin, fMax, _player?.Duration.TotalSeconds ?? 0, _notes);
+                Notes.Configure(scale, fMin, fMax, _durationSeconds, _notes);
                 UpdateNoteExportButtons();
             }
 
@@ -1192,7 +1197,7 @@ namespace QuickLook.Plugin.AudioViewer
         private void SpectrogramImage_MouseMove(object sender, MouseEventArgs e)
         {
             var frames = _spectrogramFrames;
-            if (!_spectrogramBuilt || frames == null || frames.Length == 0 || _player == null)
+            if (!_spectrogramBuilt || frames == null || frames.Length == 0 || _durationSeconds <= 0)
             {
                 HoverReadout.Visibility = Visibility.Collapsed;
                 return;
@@ -1204,7 +1209,7 @@ namespace QuickLook.Plugin.AudioViewer
             double tx = Clamp01(p.X / w);
             double u = Clamp01(1.0 - p.Y / h); // y=0 (top) is the highest frequency
 
-            double time = tx * _player.Duration.TotalSeconds;
+            double time = tx * _durationSeconds;
             var scale = PluginSettings.FreqScale;
             double fMin = FrequencyScaleMapper.EffectiveFMin(scale, _spectrogramFftSize, _spectrogramSampleRate);
             double fMax = FrequencyScaleMapper.EffectiveFMax(_spectrogramSampleRate, PluginSettings.MaxFrequencyHz);

@@ -45,20 +45,15 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         // read as distinct lanes rather than one blurred band; a shade lighter than the
         // background but well below the wave color so it doesn't compete for attention.
         public Brush LaneSeparatorBrush { get; set; } = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40));
-        private readonly Pen _separatorPen;
-        private readonly Pen _playheadPen;
+        private Pen _separatorPen;
+        private Pen _playheadPen;
 
         public WaveformView()
         {
             WaveBrush.Freeze();
             PlayheadBrush.Freeze();
             LaneSeparatorBrush.Freeze();
-            _separatorPen = new Pen(LaneSeparatorBrush, 1.0);
-            _separatorPen.Freeze();
-            // Built once (not per-render): the playhead invalidates ~30 Hz, so re-allocating
-            // and freezing a Pen every tick was pure churn.
-            _playheadPen = new Pen(PlayheadBrush, 1.5);
-            _playheadPen.Freeze();
+            RebuildPens();
 
             // The wave bitmap is intentionally 1px-per-column and stretched horizontally to
             // fill; NearestNeighbor keeps the crisp per-column look of the old DrawLine
@@ -72,7 +67,25 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             WaveBrush = FrozenBrush(wave);
             PlayheadBrush = FrozenBrush(playhead);
             BackgroundBrush = FrozenBrush(background);
+            // The pens capture their brush at construction, and the wave bitmap bakes in
+            // the wave/background colors, so both must be rebuilt — not just invalidated —
+            // or a theme switch after load leaves the playhead and the lanes in the old colors.
+            RebuildPens();
+            _waveBitmap = null;
+            _requestedWaveform = null;
+            _requestedLanePx = -1;
+            _bitmapGeneration++;
             InvalidateVisual();
+        }
+
+        // Built outside OnRender: the playhead invalidates ~30 Hz, so re-allocating and
+        // freezing a Pen every tick was pure churn.
+        private void RebuildPens()
+        {
+            _separatorPen = new Pen(LaneSeparatorBrush, 1.0);
+            _separatorPen.Freeze();
+            _playheadPen = new Pen(PlayheadBrush, 1.5);
+            _playheadPen.Freeze();
         }
 
         private static Brush FrozenBrush(Color c)
