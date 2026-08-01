@@ -154,28 +154,58 @@ namespace QuickLook.Plugin.AudioViewer.Tests
         [Fact]
         public void PlaceBox_SitsBelowRightOfTheCursorWhenThereIsRoom()
         {
-            HoverReadoutFormatter.PlaceBox(100, 100, 80, 40, 800, 600, 12, out double x, out double y);
+            HoverReadoutFormatter.PlaceBox(100, 100, 80, 40, 800, 600, 12, false, out double x, out double y);
             Assert.Equal(112, x);
             Assert.Equal(112, y);
         }
 
+        /// <summary>
+        /// The default: a constant offset from the cursor, even when that means clipping.
+        /// Re-anchoring on approach to an edge makes the numbers relocate under a smoothly
+        /// moving cursor, which is more distracting than a partly clipped box.
+        /// </summary>
         [Fact]
-        public void PlaceBox_FlipsRatherThanSlidingAlongTheEdge()
+        public void PlaceBox_ByDefaultDoesNotRepositionNearAnEdge()
         {
-            // Near the right/bottom edge the box must jump to the other side of the cursor.
-            // Clamping instead would park it on top of the very pixel being inspected.
-            HoverReadoutFormatter.PlaceBox(780, 580, 80, 40, 800, 600, 12, out double x, out double y);
+            // The box overflows the pane (762 + 80 > 800) but most of it is still readable,
+            // so it stays put and clips rather than jumping to the other side.
+            HoverReadoutFormatter.PlaceBox(750, 550, 80, 40, 800, 600, 12, false, out double x, out double y);
+            Assert.Equal(762, x);
+            Assert.Equal(562, y);
+        }
+
+        [Fact]
+        public void PlaceBox_MovesOnlyWhenItWouldBeEffectivelyInvisible()
+        {
+            // Cursor within 24px of the right edge: none of the box would be readable.
+            HoverReadoutFormatter.PlaceBox(795, 300, 80, 40, 800, 600, 12, false, out double x, out double y);
+            Assert.Equal(703, x);   // 795 - 12 - 80
+            Assert.Equal(312, y);   // vertical had room, so it is untouched
+        }
+
+        [Fact]
+        public void PlaceBox_KeepInView_FlipsRatherThanSlidingAlongTheEdge()
+        {
+            HoverReadoutFormatter.PlaceBox(780, 580, 80, 40, 800, 600, 12, true, out double x, out double y);
             Assert.Equal(688, x);   // 780 - 12 - 80
             Assert.Equal(528, y);   // 580 - 12 - 40
         }
 
         [Fact]
-        public void PlaceBox_ClampsWhenItFitsOnNeitherSide()
+        public void PlaceBox_KeepInView_ClampsWhenItFitsOnNeitherSide()
         {
             // Box wider than the pane: it cannot flip anywhere, so it must still stay inside.
-            HoverReadoutFormatter.PlaceBox(50, 50, 500, 40, 400, 600, 12, out double x, out double y);
+            HoverReadoutFormatter.PlaceBox(50, 50, 500, 40, 400, 600, 12, true, out double x, out double y);
             Assert.Equal(0, x);
             Assert.InRange(y, 0, 560);
+        }
+
+        [Fact]
+        public void PlaceBox_NeverGoesNegative()
+        {
+            HoverReadoutFormatter.PlaceBox(5, 5, 200, 100, 210, 110, 12, false, out double x, out double y);
+            Assert.True(x >= 0);
+            Assert.True(y >= 0);
         }
 
         [Fact]

@@ -115,6 +115,26 @@
               Content="&#9654;" Click="PlayPauseButton_Click"/>
       <TextBlock x:Name="TimeText" Grid.Column="1" VerticalAlignment="Center"
                  Foreground="{DynamicResource PrimaryText}" Margin="10,0" Text="00:00 / 00:00"/>
+
+      <!-- Vertical-zoom control. Lives in the transport row's spacer rather than over the
+           waveform: as an overlay it sat on top of the very signal being inspected, which
+           is exactly where the eye is. Shown while magnified, or whenever the opt-in
+           slider is enabled. -->
+      <StackPanel x:Name="GainBadge" Grid.Column="2" Orientation="Horizontal"
+                  HorizontalAlignment="Left" VerticalAlignment="Center"
+                  Margin="16,0,0,0" Visibility="Collapsed">
+        <TextBlock x:Name="GainBadgeText" Foreground="{DynamicResource SecondaryText}"
+                   FontSize="11" VerticalAlignment="Center" MinWidth="86"/>
+        <Slider x:Name="GainSlider" Width="90" Margin="4,0,0,0" VerticalAlignment="Center"
+                Visibility="Collapsed" Minimum="0" Maximum="6"
+                SmallChange="0.25" LargeChange="1"
+                ValueChanged="GainSlider_Changed"
+                ToolTip="Waveform vertical zoom"/>
+        <Button x:Name="GainResetButton" Content="reset" Margin="6,0,0,0" Padding="4,0"
+                FontSize="11" Background="Transparent" BorderThickness="0"
+                Foreground="{DynamicResource SecondaryText}" Cursor="Hand"
+                Click="GainResetButton_Click" ToolTip="Reset vertical zoom to 1x (0)"/>
+      </StackPanel>
       <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,0" VerticalAlignment="Center">
         <Button x:Name="MuteButton" Content="&#xE767;" FontFamily="Segoe MDL2 Assets" FontSize="14"
                 Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" Margin="0,0,5,0"
@@ -275,7 +295,12 @@
             <CheckBox x:Name="HoverPitchCheck" Content="Note / frequency" Foreground="{DynamicResource PrimaryText}"
                       Checked="HoverFieldCheck_Changed" Unchecked="HoverFieldCheck_Changed"/>
             <CheckBox x:Name="HoverLevelCheck" Content="Level" Foreground="{DynamicResource PrimaryText}"
-                      Margin="0,0,0,8" Checked="HoverFieldCheck_Changed" Unchecked="HoverFieldCheck_Changed"/>
+                      Checked="HoverFieldCheck_Changed" Unchecked="HoverFieldCheck_Changed"/>
+
+            <CheckBox x:Name="HoverKeepInViewCheck" Content="Keep readout inside the pane"
+                      Foreground="{DynamicResource PrimaryText}" Margin="0,4,0,8"
+                      Checked="HoverKeepInViewCheck_Changed" Unchecked="HoverKeepInViewCheck_Changed"
+                      ToolTip="Flip the readout to the other side of the cursor near an edge, instead of letting it clip"/>
 
             <CheckBox x:Name="FileInfoCheck" Content="Show file info" Foreground="{DynamicResource PrimaryText}"
                       Margin="0,0,0,8" Checked="FileInfoCheck_Changed" Unchecked="FileInfoCheck_Changed"/>
@@ -312,9 +337,22 @@
                        Style="{StaticResource SettingsFieldLabel}" TextWrapping="Wrap" Margin="0,2,0,4"/>
 
             <CheckBox x:Name="ClipMarkCheck" Content="Mark clipped columns"
-                      Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,8"
+                      Foreground="{DynamicResource PrimaryText}"
                       Checked="ClipMarkCheck_Changed" Unchecked="ClipMarkCheck_Changed"
                       ToolTip="Highlight columns whose peaks the lane edge cut off"/>
+
+            <CheckBox x:Name="GainSliderCheck" Content="Show zoom slider"
+                      Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,8"
+                      Checked="GainSliderCheck_Changed" Unchecked="GainSliderCheck_Changed"
+                      ToolTip="Add a vertical-zoom slider next to the time readout"/>
+
+            <!-- Order is load-bearing: the handler casts SelectedIndex to TimeAxisDensity. -->
+            <TextBlock Text="Time axis marks" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="TimeDensityCombo" Margin="0,0,0,8" SelectionChanged="TimeDensityCombo_Changed">
+              <ComboBoxItem Content="Sparse"/>
+              <ComboBoxItem Content="Normal"/>
+              <ComboBoxItem Content="Dense"/>
+            </ComboBox>
 
             <!-- ===== LAYOUT: the header doubles as this group's only field label ===== -->
             <Border Style="{StaticResource SettingsSeparator}"/>
@@ -431,23 +469,6 @@
                    Text="Loading…"/>
 
         <!-- Hover readout (time · frequency · level under the cursor). -->
-        <!-- Vertical-zoom badge. Sits outside the scrolling Timeline so it stays put, and
-             is only visible while the waveform is magnified: a stretched waveform must
-             never be mistaken for the file's real level. -->
-        <Border x:Name="GainBadge" HorizontalAlignment="Left" VerticalAlignment="Top"
-                Margin="6,6,0,0" Visibility="Collapsed"
-                Background="{DynamicResource OverlayBackground}" BorderBrush="{DynamicResource OverlayBorder}"
-                BorderThickness="1" CornerRadius="3" Padding="6,2">
-          <StackPanel Orientation="Horizontal">
-            <TextBlock x:Name="GainBadgeText" Foreground="{DynamicResource OverlayText}"
-                       FontFamily="Consolas, Courier New" FontSize="11" VerticalAlignment="Center"/>
-            <Button x:Name="GainResetButton" Content="reset" Margin="8,0,0,0" Padding="4,0"
-                    FontSize="11" Background="Transparent" BorderThickness="0"
-                    Foreground="{DynamicResource OverlayText}" Cursor="Hand"
-                    Click="GainResetButton_Click" ToolTip="Reset vertical zoom to 1x (0)"/>
-          </StackPanel>
-        </Border>
-
         <Border x:Name="HoverReadout" HorizontalAlignment="Left" VerticalAlignment="Top"
                 Background="{DynamicResource OverlayBackground}" BorderBrush="{DynamicResource OverlayBorder}"
                 BorderThickness="1" CornerRadius="3" Padding="6,3" Visibility="Collapsed"

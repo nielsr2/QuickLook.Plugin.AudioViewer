@@ -65,6 +65,7 @@ namespace QuickLook.Plugin.AudioViewer
         // Vertical magnification of the waveform. Session-only and deliberately not
         // persisted: it belongs to the file being viewed, not to the user.
         private double _waveformGain = 1.0;
+        private bool _suppressGainSlider;   // guards the slider against our own writes
 
         // Cached linear STFT frames so setting changes re-render without re-running
         // the FFT; only an FFT-size change forces a recompute.
@@ -204,11 +205,29 @@ namespace QuickLook.Plugin.AudioViewer
             Waveform.Gain = gain;
 
             bool magnified = gain > 1.0 + 1e-9;
-            GainBadge.Visibility = magnified ? Visibility.Visible : Visibility.Collapsed;
-            if (magnified)
-                GainBadgeText.Text = (fromAutoFit ? "Auto-fit " : "Zoom ") + WaveformGain.FormatGain(gain);
+            bool slider = PluginSettings.ShowGainSlider;
+
+            // Keep the row present while the slider is on, so there is always something to
+            // drag back up from 1x.
+            GainBadge.Visibility = magnified || slider ? Visibility.Visible : Visibility.Collapsed;
+            GainSlider.Visibility = slider ? Visibility.Visible : Visibility.Collapsed;
+            GainBadgeText.Text = magnified
+                ? (fromAutoFit ? "Auto-fit " : "Zoom ") + WaveformGain.FormatGain(gain)
+                : "Zoom ×1";
+
+            // The slider is log2(gain), so each unit is a doubling and the travel feels even
+            // across 1x..64x instead of cramming everything below 8x into the first eighth.
+            _suppressGainSlider = true;
+            GainSlider.Value = Math.Log(gain, 2.0);
+            _suppressGainSlider = false;
 
             RefreshAmplitudeRuler();   // the dB ticks move with the magnification
+        }
+
+        private void GainSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_suppressGainSlider || _initializingSettings) return;
+            SetWaveformGain(Math.Pow(2.0, e.NewValue), fromAutoFit: false);
         }
 
         /// <summary>
@@ -280,6 +299,9 @@ namespace QuickLook.Plugin.AudioViewer
             StereoModeCombo.SelectedIndex = (int)PluginSettings.StereoMode;
             AutoFitCheck.IsChecked = PluginSettings.WaveformAutoFit;
             ClipMarkCheck.IsChecked = PluginSettings.WaveformShowClipping;
+            GainSliderCheck.IsChecked = PluginSettings.ShowGainSlider;
+            TimeDensityCombo.SelectedIndex = (int)PluginSettings.TimeAxisDensity;
+            HoverKeepInViewCheck.IsChecked = PluginSettings.HoverKeepInView;
             FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
             AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
             ColorCombo.SelectedIndex = (int)PluginSettings.Colormap;
@@ -974,6 +996,27 @@ namespace QuickLook.Plugin.AudioViewer
             Waveform.ShowClipping = PluginSettings.WaveformShowClipping;
         }
 
+        private void GainSliderCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.ShowGainSlider = GainSliderCheck.IsChecked == true;
+            SetWaveformGain(_waveformGain, fromAutoFit: false); // re-evaluates row visibility
+        }
+
+        private void TimeDensityCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || TimeDensityCombo.SelectedIndex < 0) return;
+            PluginSettings.TimeAxisDensity = (TimeAxisDensity)TimeDensityCombo.SelectedIndex;
+            TimeAxis.Configure(_durationSeconds, PluginSettings.TimeAxisMinPxPerLabel);
+        }
+
+        private void HoverKeepInViewCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializingSettings) return;
+            // Read live on the next MouseMove, so nothing to re-render.
+            PluginSettings.HoverKeepInView = HoverKeepInViewCheck.IsChecked == true;
+        }
+
         private void StereoModeCombo_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (_initializingSettings || StereoModeCombo.SelectedIndex < 0) return;
@@ -1341,7 +1384,7 @@ namespace QuickLook.Plugin.AudioViewer
 
             // TimeAxis.Width is bound to Timeline.ActualWidth in XAML, so it matches the
             // stretched width for short files too; here we only supply the duration.
-            TimeAxis.Configure(seconds);
+            TimeAxis.Configure(seconds, PluginSettings.TimeAxisMinPxPerLabel);
             TimeAxis.Visibility = Visibility.Visible;
         }
 
@@ -1537,10 +1580,16 @@ namespace QuickLook.Plugin.AudioViewer
             }
             HoverText.Text = readout;
 
+            // Measure against the text we just set: ActualWidth still reflects the previous
+            // readout, and in box mode the width changes with the values, so placing from
+            // it puts the box in the wrong place for one frame and mis-detects overflow.
+            HoverReadout.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var box = HoverReadout.DesiredSize;
+
             var pc = e.GetPosition(ContentGrid);
-            HoverReadoutFormatter.PlaceBox(pc.X, pc.Y,
-                HoverReadout.ActualWidth, HoverReadout.ActualHeight,
+            HoverReadoutFormatter.PlaceBox(pc.X, pc.Y, box.Width, box.Height,
                 ContentGrid.ActualWidth, ContentGrid.ActualHeight, 12,
+                PluginSettings.HoverKeepInView,
                 out double hx, out double hy);
             HoverTranslate.X = hx;
             HoverTranslate.Y = hy;

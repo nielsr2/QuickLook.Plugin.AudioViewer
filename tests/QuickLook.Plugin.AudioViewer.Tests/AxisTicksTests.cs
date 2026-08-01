@@ -102,6 +102,57 @@ namespace QuickLook.Plugin.AudioViewer.Tests
             Assert.Equal(labels.Count, new System.Collections.Generic.HashSet<string>(labels).Count);
         }
 
+        /// <summary>
+        /// Reproduces the label-drop the time ruler had: labels were positioned with
+        /// Math.Min(width - textWidth, x + 2), so every one past that point collapsed onto
+        /// the same x. The first collapsed label set the de-clutter cursor near the right
+        /// edge and every later label then tested as overlapping and was dropped — on a
+        /// 16-minute file the axis stopped a minute in. De-cluttering must compare the
+        /// unclamped positions.
+        /// </summary>
+        [Fact]
+        public void LongFile_LabelsRunTheWholeLength()
+        {
+            const double duration = 984.682;   // 16:24
+            const double width = 12000;        // the timeline width cap
+            const double labelWidth = 26;      // roughly "10:00" at 10pt
+
+            double step = AxisTicks.TimeStepSeconds(duration, width, 64);
+            var ticks = AxisTicks.TimeTicks(duration, step);
+            Assert.True(ticks.Length > 90, $"expected many ticks, got {ticks.Length}");
+
+            // Mirror the ruler's de-clutter, comparing unclamped x as the fixed code does.
+            int drawn = 0;
+            double lastLabelEnd = double.NegativeInfinity;
+            double lastDrawnX = 0;
+            foreach (var t in ticks)
+            {
+                double x = t / duration * width;
+                if (x < lastLabelEnd + 4) continue;
+                lastLabelEnd = x + labelWidth;
+                lastDrawnX = x;
+                drawn++;
+            }
+
+            // Every tick is far enough apart to keep its label at this step.
+            Assert.Equal(ticks.Length, drawn);
+            // And the last one really is at the far end, not stranded near the start.
+            Assert.True(lastDrawnX > width * 0.95, $"labels stopped at x={lastDrawnX} of {width}");
+        }
+
+        [Fact]
+        public void DensityChangesTheStep()
+        {
+            const double duration = 984.682, width = 12000;
+            double sparse = AxisTicks.TimeStepSeconds(duration, width, 110);
+            double normal = AxisTicks.TimeStepSeconds(duration, width, 64);
+            double dense = AxisTicks.TimeStepSeconds(duration, width, 40);
+
+            Assert.True(sparse >= normal, $"sparse {sparse} should be >= normal {normal}");
+            Assert.True(dense <= normal, $"dense {dense} should be <= normal {normal}");
+            Assert.True(dense < sparse, "dense and sparse should actually differ");
+        }
+
         [Fact]
         public void DbToFraction_PlacesLevelsWithinTheHalfLane()
         {

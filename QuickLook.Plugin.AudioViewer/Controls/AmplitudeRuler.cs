@@ -20,6 +20,9 @@ namespace QuickLook.Plugin.AudioViewer.Controls
     /// </summary>
     public sealed class AmplitudeRuler : FrameworkElement
     {
+        /// <summary>Half a 10pt label's height; the clearance kept from the band edges.</summary>
+        private const double LabelHalfHeight = 8;
+
         private double _gain = 1.0;
         private int _lanes = 1;
         private double _bottomFraction = 1.0;
@@ -63,6 +66,12 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             double band = _bottomFraction * h;
             if (band <= 4) return;
 
+            // The frequency ruler shares this cell and starts exactly where this band ends,
+            // so its topmost label sits right at the boundary. Keep clear of it, or the two
+            // collide into unreadable overlapping text — most visibly at gain 1, where the
+            // 0 dB tick lands precisely on the lane edge.
+            double usable = band - LabelHalfHeight;
+
             double laneH = _laneHeightDip > 0 ? _laneHeightDip : band / _lanes;
             var pen = new Pen(_line, 1); pen.Freeze();
             double dpi = PixelsPerDip();
@@ -95,7 +104,9 @@ namespace QuickLook.Plugin.AudioViewer.Controls
                     for (int sign = -1; sign <= 1; sign += 2)
                     {
                         double y = mid - sign * frac * half;
-                        if (y < 0 || y > band) continue;
+                        // Stay clear of both band edges: the bottom one abuts the frequency
+                        // ruler, and a label straddling the top is half-clipped anyway.
+                        if (y < LabelHalfHeight || y > usable) continue;
                         if (Math.Abs(y - lastY) < 13) continue;
                         lastY = y;
 

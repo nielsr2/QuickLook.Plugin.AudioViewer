@@ -176,6 +176,45 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("WaveformShowClipping", value, Domain);
         }
 
+        /// <summary>How densely the time axis is marked.</summary>
+        public static TimeAxisDensity TimeAxisDensity
+        {
+            get => ParseEnum("TimeAxisDensity", TimeAxisDensity.Normal);
+            set => SettingHelper.Set("TimeAxisDensity", value.ToString(), Domain);
+        }
+
+        /// <summary>Minimum pixels between time-axis labels, which selects the tick step.</summary>
+        public static double TimeAxisMinPxPerLabel
+        {
+            get
+            {
+                switch (TimeAxisDensity)
+                {
+                    case TimeAxisDensity.Sparse: return 110;
+                    case TimeAxisDensity.Dense: return 40;
+                    default: return 64;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reposition the hover readout so it stays inside the pane. Off by default: the
+        /// constant offset from the cursor is easier to read than a box that jumps sides,
+        /// and it is only moved when it would otherwise be entirely out of view.
+        /// </summary>
+        public static bool HoverKeepInView
+        {
+            get => SettingHelper.Get("HoverKeepInView", false, Domain);
+            set => SettingHelper.Set("HoverKeepInView", value, Domain);
+        }
+
+        /// <summary>Show an on-screen slider for the waveform's vertical zoom.</summary>
+        public static bool ShowGainSlider
+        {
+            get => SettingHelper.Get("ShowGainSlider", false, Domain);
+            set => SettingHelper.Set("ShowGainSlider", value, Domain);
+        }
+
         /// <summary>Hover readout layout: labelled rows (default) or a single compact line.</summary>
         public static HoverReadoutStyle HoverStyle
         {

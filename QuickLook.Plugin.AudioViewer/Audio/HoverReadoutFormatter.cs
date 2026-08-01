@@ -123,24 +123,43 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             return sb.ToString();
         }
 
+        /// <summary>Below this much of the box still on-screen, it is moved regardless.</summary>
+        private const double MinVisible = 24;
+
         /// <summary>
-        /// Place the readout next to the cursor, flipping to the other side when it would
-        /// overflow the pane rather than sliding along the edge (which parks it on top of
-        /// whatever is being inspected). Falls back to clamping if it fits on neither side.
+        /// Place the readout next to the cursor.
         /// </summary>
+        /// <param name="keepInView">
+        /// When true, the box flips to the other side of the cursor as soon as it would
+        /// overflow, and is clamped if it fits on neither side.
+        ///
+        /// When false (the default) it simply keeps a constant offset from the cursor and
+        /// is left to clip at the pane edge. Constantly re-anchoring is more distracting
+        /// than a partly clipped box: the readout jumps sides while the cursor is moving
+        /// smoothly, so the numbers you are reading relocate under you. It still steps in
+        /// once the box would be effectively invisible.
+        /// </param>
         internal static void PlaceBox(
             double cursorX, double cursorY, double boxW, double boxH,
-            double paneW, double paneH, double gap,
+            double paneW, double paneH, double gap, bool keepInView,
             out double x, out double y)
         {
             x = cursorX + gap;
-            if (x + boxW > paneW && cursorX - gap - boxW >= 0) x = cursorX - gap - boxW;
-
             y = cursorY + gap;
-            if (y + boxH > paneH && cursorY - gap - boxH >= 0) y = cursorY - gap - boxH;
 
-            if (x + boxW > paneW) x = paneW - boxW;
-            if (y + boxH > paneH) y = paneH - boxH;
+            if (keepInView)
+            {
+                if (x + boxW > paneW && cursorX - gap - boxW >= 0) x = cursorX - gap - boxW;
+                if (y + boxH > paneH && cursorY - gap - boxH >= 0) y = cursorY - gap - boxH;
+                if (x + boxW > paneW) x = paneW - boxW;
+                if (y + boxH > paneH) y = paneH - boxH;
+            }
+            else
+            {
+                if (x > paneW - MinVisible) x = cursorX - gap - boxW;
+                if (y > paneH - MinVisible) y = cursorY - gap - boxH;
+            }
+
             if (x < 0) x = 0;
             if (y < 0) y = 0;
         }

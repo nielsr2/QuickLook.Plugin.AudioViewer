@@ -107,6 +107,21 @@ namespace QuickLook.Plugin.AudioViewer.Settings
         Compact
     }
 
+    /// <summary>How densely the time axis is marked.</summary>
+    /// <remarks>
+    /// Members are appended, never reordered: the settings combo casts its SelectedIndex
+    /// straight to this enum, so the XAML item order must stay in lockstep.
+    /// </remarks>
+    public enum TimeAxisDensity
+    {
+        /// <summary>Fewer, further-apart marks.</summary>
+        Sparse,
+        /// <summary>The long-standing spacing (default).</summary>
+        Normal,
+        /// <summary>More marks, as many as fit without overlapping.</summary>
+        Dense
+    }
+
     /// <summary>Which light/dark palette the viewer uses.</summary>
     /// <remarks>
     /// Members are appended, never reordered: the settings combo casts its SelectedIndex
