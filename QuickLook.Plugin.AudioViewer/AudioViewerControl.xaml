@@ -196,10 +196,14 @@
             <TextBlock Text="APPEARANCE" Style="{StaticResource SettingsSectionHeader}"/>
 
             <TextBlock Text="Amplitude" Style="{StaticResource SettingsFieldLabel}"/>
-            <ComboBox x:Name="AmpCombo" Margin="0,0,0,8" SelectionChanged="AmpCombo_Changed">
+            <!-- Order is load-bearing: the handler casts SelectedIndex to AmplitudeScale. -->
+            <ComboBox x:Name="AmpCombo" SelectionChanged="AmpCombo_Changed">
               <ComboBoxItem Content="Decibel (dB)"/>
               <ComboBoxItem Content="Linear"/>
+              <ComboBoxItem Content="dB² (lifts quiet detail)"/>
             </ComboBox>
+            <TextBlock Text="dB² halves the log gain against the same contrast floor, so background detail and upper partials sit higher up the colour ramp than plain dB."
+                       Style="{StaticResource SettingsFieldLabel}" TextWrapping="Wrap" Margin="0,2,0,8"/>
 
             <TextBlock Text="Contrast (dB floor)" Style="{StaticResource SettingsFieldLabel}"/>
             <Slider x:Name="ContrastSlider" Margin="0,0,0,8" Minimum="-120" Maximum="-40"

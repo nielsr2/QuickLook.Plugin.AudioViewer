@@ -18,12 +18,28 @@ namespace QuickLook.Plugin.AudioViewer.Settings
     }
 
     /// <summary>How magnitude maps to color intensity.</summary>
+    /// <remarks>
+    /// Members are appended, never reordered: the settings combo casts its SelectedIndex
+    /// straight to this enum, so the XAML item order must stay in lockstep.
+    /// </remarks>
     public enum AmplitudeScale
     {
-        /// <summary>Logarithmic (dB) — reveals quiet detail.</summary>
+        /// <summary>Logarithmic (dB) — reveals quiet detail. 20*log10(magnitude).</summary>
         Decibel,
         /// <summary>Linear magnitude — emphasizes loud peaks.</summary>
-        Linear
+        Linear,
+        /// <summary>
+        /// Half-gain logarithmic, 10*log10(magnitude), against the same contrast floor.
+        /// Halving the log gain while keeping the floor lifts quiet material well up the
+        /// colour ramp — a bin at 1e-4 reads -40 instead of -80 — so background detail and
+        /// upper partials stay visible where the plain dB scale crushes them toward black.
+        ///
+        /// Named for Sonic Visualiser's dBV^2, which is what this option was requested as.
+        /// Note that the literal reading of that name (log of the squared magnitude,
+        /// 10*log10(m^2)) is identical to <see cref="Decibel"/> and would render exactly
+        /// the same image, so it cannot be what distinguishes the two in practice.
+        /// </summary>
+        DecibelSquared
     }
 
     /// <summary>Spectrogram color palette.</summary>

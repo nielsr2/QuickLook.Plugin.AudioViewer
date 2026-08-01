@@ -1238,12 +1238,11 @@ namespace QuickLook.Plugin.AudioViewer
             int bin = (int)(freq / hzPerBin);
             if (bin < 0) bin = 0; else if (bin > frame.Length - 1) bin = frame.Length - 1;
             double mag = frame[bin];
-            string level = PluginSettings.AmpScale == AmplitudeScale.Decibel
-                ? $"{Math.Round(20.0 * Math.Log10(mag + 1e-12))} dB"
-                : mag.ToString("0.000");
+            string level = HoverReadoutFormatter.FormatLevel(mag, PluginSettings.AmpScale);
 
             string pitch = HoverReadoutFormatter.FormatPitch(freq, PluginSettings.HoverReadoutMode);
-            HoverText.Text = $"{AxisTicks.FormatTime(time)}  ·  {pitch}  ·  {level}";
+            int timeDecimals = PluginSettings.ShowMilliseconds ? 3 : 0;
+            HoverText.Text = $"{AxisTicks.FormatTime(time, timeDecimals)}  ·  {pitch}  ·  {level}";
 
             var pc = e.GetPosition(ContentGrid);
             HoverTranslate.X = Math.Min(pc.X + 12, ContentGrid.ActualWidth - HoverReadout.ActualWidth - 4);

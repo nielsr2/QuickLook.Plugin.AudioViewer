@@ -36,8 +36,11 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         public double Black;
         /// <summary>Value mapped to the top (brightest) of the colormap.</summary>
         public double Ceiling;
-        /// <summary>True if the values are in dB; otherwise linear magnitude.</summary>
-        public bool Decibel;
+        /// <summary>Which amplitude domain <see cref="Black"/>/<see cref="Ceiling"/> are expressed in.</summary>
+        public AmplitudeScale Scale;
+
+        /// <summary>True if the values carry a dB unit (either dB scale) rather than raw magnitude.</summary>
+        public bool Decibel => Scale != AmplitudeScale.Linear;
     }
 
     /// <summary>
@@ -164,7 +167,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             {
                 Black = black,
                 Ceiling = ceiling,
-                Decibel = o.AmplitudeScale == AmplitudeScale.Decibel
+                Scale = o.AmplitudeScale
             };
             var bmp = new WriteableBitmap(pw, ph, 96, 96, PixelFormats.Bgra32, null);
             bmp.WritePixels(new System.Windows.Int32Rect(0, 0, pw, ph), pixels, pw * 4, 0);
@@ -193,7 +196,9 @@ namespace QuickLook.Plugin.AudioViewer.Audio
 
             int frames = linearFrames?.Length ?? 0;
             int binsAvail = frames > 0 ? linearFrames[0].Length : 0;
-            bool db = o.AmplitudeScale == AmplitudeScale.Decibel;
+            bool db = o.AmplitudeScale != AmplitudeScale.Linear;
+            // Half the log gain, same floor: quiet bins land much higher up the ramp.
+            double logGain = o.AmplitudeScale == AmplitudeScale.DecibelSquared ? 5.0 : 10.0;
 
             // row 0 = lowest frequency (bottom); each row aggregates a span of FFT bins.
             var rowBins = FrequencyScaleMapper.BuildRowBins(ph, o.FrequencyScale, o.FftSize, o.SampleRate, o.MaxFrequencyHz);
@@ -223,7 +228,8 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                             double p = m * m;
                             if (p > peakPow) peakPow = p;
                         }
-                        v = db ? 10.0 * Math.Log10(peakPow + 1e-12) : Math.Sqrt(peakPow);
+                        // logGain 10 over power == 20*log10(magnitude); logGain 5 halves it.
+                        v = db ? logGain * Math.Log10(peakPow + 1e-12) : Math.Sqrt(peakPow);
                     }
                     vals[x * ph + r] = v;
                     if (v > maxVal) maxVal = v;
