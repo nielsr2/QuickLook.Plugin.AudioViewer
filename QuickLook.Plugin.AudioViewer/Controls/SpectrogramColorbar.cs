@@ -78,7 +78,7 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         private string LabelFor(double frac)
         {
             double v = _levels.Black + frac * (_levels.Ceiling - _levels.Black);
-            return _levels.Decibel ? $"{Math.Round(v)} dB" : v.ToString("0.00");
+            return _levels.Decibel ? $"{Math.Round(v)} dB" : AxisTicks.FormatMagnitude(v);
         }
 
         private enum VAlign { Top, Center, Bottom }

@@ -1,3 +1,4 @@
+using System;
 using QuickLook.Plugin.AudioViewer.Controls;
 using Xunit;
 
@@ -53,5 +54,37 @@ namespace QuickLook.Plugin.AudioViewer.Tests
         [InlineData(3661, "1:01:01")]
         public void FormatTime_IsReadable(double seconds, string expected)
             => Assert.Equal(expected, AxisTicks.FormatTime(seconds));
+
+        [Fact]
+        public void FormatMagnitude_KeepsResolutionAcrossTheWholeRange()
+        {
+            Assert.Equal("0", AxisTicks.FormatMagnitude(0));
+            Assert.Equal("1.234", AxisTicks.FormatMagnitude(1.2344));
+            Assert.Equal("0.01580", AxisTicks.FormatMagnitude(0.0158));
+            Assert.Equal("0.00316", AxisTicks.FormatMagnitude(0.00316));
+            Assert.Equal("3.16e-5", AxisTicks.FormatMagnitude(3.16e-5));
+        }
+
+        /// <summary>
+        /// The colorbar's three ticks are Black, the midpoint, and Ceiling. Linear mode
+        /// derives Black as Ceiling * 10^(DbFloor/20), so at the default -90 dB floor the
+        /// bottom tick is ~31 600x smaller than the top. The previous "0.00" format
+        /// rendered all three identically on quiet material, which is what made the
+        /// legend read "0.00 / 0.00 / 0.00".
+        /// </summary>
+        [Theory]
+        [InlineData(0.004)]     // quiet file
+        [InlineData(0.9)]       // loud file
+        public void FormatMagnitude_ColorbarTicksAreDistinct(double ceiling)
+        {
+            double black = ceiling * Math.Pow(10.0, -90.0 / 20.0);
+            string lo = AxisTicks.FormatMagnitude(black);
+            string mid = AxisTicks.FormatMagnitude(black + 0.5 * (ceiling - black));
+            string hi = AxisTicks.FormatMagnitude(ceiling);
+
+            Assert.NotEqual(lo, mid);
+            Assert.NotEqual(mid, hi);
+            Assert.NotEqual(lo, hi);
+        }
     }
 }

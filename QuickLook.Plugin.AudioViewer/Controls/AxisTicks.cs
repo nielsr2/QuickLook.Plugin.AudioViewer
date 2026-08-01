@@ -72,5 +72,25 @@ namespace QuickLook.Plugin.AudioViewer.Controls
                 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}"
                 : $"{(int)t.TotalMinutes}:{t.Seconds:00}";
         }
+
+        /// <summary>
+        /// Formats a raw linear FFT magnitude for the colorbar legend.
+        ///
+        /// These span many orders of magnitude and are not normalised: at the default
+        /// -90 dB contrast floor the bottom of the scale is ~31 600x smaller than the top,
+        /// so a fixed "0.00" renders the bottom tick as "0.00" for essentially every file,
+        /// and on quiet material collapses all three ticks to the same string. Keeps three
+        /// significant figures, dropping to exponent form once fixed-point would be nothing
+        /// but leading zeroes.
+        /// </summary>
+        internal static string FormatMagnitude(double v)
+        {
+            if (double.IsNaN(v) || double.IsInfinity(v)) return "—";
+            double a = Math.Abs(v);
+            if (a == 0) return "0";
+            if (a >= 0.1) return v.ToString("0.000");
+            if (a >= 0.001) return v.ToString("0.00000");
+            return v.ToString("0.00e+0");
+        }
     }
 }
