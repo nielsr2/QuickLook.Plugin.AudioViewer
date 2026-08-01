@@ -31,8 +31,18 @@ namespace QuickLook.Plugin.AudioViewer
         private double _durationSeconds;
         private DispatcherTimer _timer;
         private bool _scrubbing;
+
+        // Set when the user scrolls the timeline themselves, suspending playhead
+        // auto-follow so it stops yanking the view back on the next tick. Cleared on a
+        // seek or when playback (re)starts, both of which are explicit "go here" gestures.
+        private bool _userScrolled;
+
         private bool _showingSpectrogram;
         private bool _spectrogramBuilt;
+
+        // True when ComputeMagnitudes stopped at the frame cap, so the frames cover less
+        // than the whole file and every x->time mapping downstream is off.
+        private bool _spectrogramCapped;
 
         // Lifecycle: the whole load runs async after the control is created, but the
         // preview can be closed (Unload) mid-load. _cts cancels in-flight decode work
@@ -587,6 +597,7 @@ namespace QuickLook.Plugin.AudioViewer
             _suppressSeekValueChanged = false;
             Waveform.PlayheadFraction = frac;
             UpdateSpectrogramPlayhead(frac);
+            FollowPlayhead(frac);   // runs for every view, not just when the spectrogram is up
             UpdateTimeText();
         }
 
@@ -616,7 +627,9 @@ namespace QuickLook.Plugin.AudioViewer
         private void TogglePlay(bool play)
         {
             if (_player == null) return;
-            if (play) { _player.Play(); PlayPauseButton.Content = "⏸"; }
+            // Pressing play is an explicit "show me what is happening", so resume following
+            // even if the user had scrolled elsewhere while paused.
+            if (play) { _userScrolled = false; _player.Play(); PlayPauseButton.Content = "⏸"; }
             else { _player.Pause(); PlayPauseButton.Content = "▶"; }
         }
 
@@ -653,7 +666,13 @@ namespace QuickLook.Plugin.AudioViewer
             _player.Seek(TimeSpan.FromSeconds(fraction * _player.Duration.TotalSeconds));
             Waveform.PlayheadFraction = fraction;
             UpdateSpectrogramPlayhead(fraction);
-            ScrollPlayheadIntoView(fraction);
+
+            // A seek is an explicit "go here", so resume following — but do not yank the
+            // view while a waveform drag has the pointer captured: re-centring on every
+            // drag step slides the waveform out from under the cursor being dragged.
+            _userScrolled = false;
+            if (!Waveform.IsDragging) ScrollPlayheadIntoView(fraction);
+
             UpdateTimeText();
         }
 
@@ -1078,10 +1097,17 @@ namespace QuickLook.Plugin.AudioViewer
             // the lanes instead — otherwise this preview handler (which tunnels before
             // WaveScroll's own bubbling handler ever sees the event) would swallow it for
             // horizontal timeline scrolling and lanes below the viewport would be unreachable.
-            if (WaveScroll.IsVisible && WaveScroll.ScrollableHeight > 0 && WaveScroll.IsMouseOver)
+            //
+            // Shift forces the time axis regardless. Without it the timeline is simply
+            // unreachable by wheel over a lane stack — only the scrollbar or a trackpad
+            // swipe could move it — and Shift+wheel is the conventional "other axis".
+            bool forceTimeAxis = Keyboard.Modifiers == ModifierKeys.Shift;
+            if (!forceTimeAxis
+                && WaveScroll.IsVisible && WaveScroll.ScrollableHeight > 0 && WaveScroll.IsMouseOver)
                 return;
 
             if (ViewScroll.ScrollableWidth <= 0) return; // nothing to scroll; let it bubble
+            NoteManualScroll();
             ViewScroll.ScrollToHorizontalOffset(ViewScroll.HorizontalOffset - e.Delta);
             e.Handled = true;
         }
@@ -1105,6 +1131,7 @@ namespace QuickLook.Plugin.AudioViewer
             if (p.X < 0 || p.Y < 0 || p.X > ViewScroll.ActualWidth || p.Y > ViewScroll.ActualHeight)
                 return IntPtr.Zero;
 
+            NoteManualScroll();
             ViewScroll.ScrollToHorizontalOffset(ViewScroll.HorizontalOffset + delta);
             handled = true;
             return IntPtr.Zero;
@@ -1219,10 +1246,24 @@ namespace QuickLook.Plugin.AudioViewer
                 _spectrogramSampleRate = sr;
                 _spectrogramFftSize = fftSize;
                 _spectrogramChannelSelection = selection;
+                _spectrogramCapped = capped;
                 SpectrogramButton.IsEnabled = true;
             }
 
             RenderSpectrogram();
+
+            // `capped` was computed and passed but never read. When the frame cap is hit
+            // the spectrogram stops short of the end of the file, while the playhead, the
+            // time ruler and the hover readout all keep mapping x across the full duration
+            // — so every time they report is wrong, with nothing on screen saying so. The
+            // hop is chosen to land under the cap, so this should not normally fire; say so
+            // when it does rather than quietly mis-mapping.
+            if (_spectrogramCapped && !_unloaded)
+            {
+                StatusText.Text = "Spectrogram truncated at the frame limit — times shown past " +
+                                  "this point are approximate.";
+                StatusText.Visibility = Visibility.Visible;
+            }
         }
 
         /// <summary>Colorize the cached frames with the current display settings (no FFT).</summary>
@@ -1319,6 +1360,7 @@ namespace QuickLook.Plugin.AudioViewer
 
         private void HScroll_Scroll(object sender, ScrollEventArgs e)
         {
+            NoteManualScroll();   // dragging the scrollbar is as deliberate as it gets
             ViewScroll.ScrollToHorizontalOffset(e.NewValue);
         }
 
@@ -1513,17 +1555,48 @@ namespace QuickLook.Plugin.AudioViewer
         private void UpdateSpectrogramPlayhead(double frac)
         {
             if (SpectrogramImage.Visibility != Visibility.Visible || !_spectrogramBuilt) return;
-            double x = frac * Timeline.ActualWidth;
-            SpectrogramPlayhead.Margin = new Thickness(x, 0, 0, 0);
-
-            // During playback, keep the playhead in view as it nears a scrolled edge.
-            if (_player != null && _player.IsPlaying && !_scrubbing)
-            {
-                double off = ViewScroll.HorizontalOffset, vw = ViewScroll.ViewportWidth;
-                if (vw > 0 && Timeline.ActualWidth > vw && (x < off + 40 || x > off + vw - 40))
-                    ViewScroll.ScrollToHorizontalOffset(Math.Max(0, x - vw / 2));
-            }
+            SpectrogramPlayhead.Margin = new Thickness(frac * Timeline.ActualWidth, 0, 0, 0);
         }
+
+        /// <summary>
+        /// During playback, keep the playhead in view as it nears a scrolled edge.
+        /// </summary>
+        /// <remarks>
+        /// This used to live inside <see cref="UpdateSpectrogramPlayhead"/>, behind its
+        /// early return — so it only ran when the spectrogram was visible. Multichannel
+        /// files open to the waveform-only view by design and therefore never followed the
+        /// playhead at all. It is now driven from Tick() independently of which view is up.
+        ///
+        /// It also no longer fights a deliberate scroll. The old condition was "the
+        /// playhead is not comfortably inside the viewport", which is equally true of every
+        /// position outside it, so any manual scroll away during playback was undone on the
+        /// next 33 ms tick. Manual scrolling now suspends following until the next seek or
+        /// until playback restarts.
+        /// </remarks>
+        private void FollowPlayhead(double frac)
+        {
+            if (_player == null || !_player.IsPlaying || _scrubbing || _userScrolled) return;
+
+            double vw = ViewScroll.ViewportWidth;
+            double tw = Timeline.ActualWidth;
+            if (vw <= 0 || tw <= vw) return;
+
+            double x = frac * tw;
+            double off = ViewScroll.HorizontalOffset;
+
+            // Only chase it while it is actually in (or just past) the viewport. If it is
+            // far outside, the user scrolled somewhere on purpose and _userScrolled has
+            // already suppressed us; this is the belt-and-braces half of the same idea.
+            if (x < off - vw || x > off + 2 * vw) return;
+            if (x >= off + 40 && x <= off + vw - 40) return;
+
+            ViewScroll.ScrollToHorizontalOffset(Math.Max(0, x - vw / 2));
+        }
+
+        /// <summary>
+        /// Note that the user took control of the horizontal scroll, suspending auto-follow.
+        /// </summary>
+        private void NoteManualScroll() => _userScrolled = true;
 
         private void ScrollPlayheadIntoView(double frac)
         {

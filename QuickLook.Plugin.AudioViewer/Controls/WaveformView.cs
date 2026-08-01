@@ -286,6 +286,13 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             ReleaseMouseCapture();
         }
 
+        /// <summary>
+        /// True while the pointer is captured for a click-drag scrub. The host reads this
+        /// to suppress auto-scrolling: re-centring the timeline under a captured pointer
+        /// moves the waveform out from under it on every drag step.
+        /// </summary>
+        public bool IsDragging => _dragging;
+
         private void RaiseSeek(double x) => SeekRequested?.Invoke(FractionFromX(x, ActualWidth));
     }
 }
