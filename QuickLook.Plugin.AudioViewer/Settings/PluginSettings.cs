@@ -151,6 +151,31 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("ReverseMode", value.ToString(), Domain);
         }
 
+        /// <summary>
+        /// Magnify a quiet file's waveform to fill its lane on load. On by default: a flat
+        /// line that hides real content is a worse first impression than a correctly scaled
+        /// waveform, and the on-screen badge says when it is active.
+        /// </summary>
+        /// <remarks>
+        /// Only the policy is persisted, never the gain value. A gain of 18x belongs to one
+        /// quiet file; carrying it to the next normally-levelled file would render it
+        /// clipped and broken with no obvious cause. Per-file storage is not practical
+        /// either — SettingHelper names each XML element after its key, and a file path
+        /// cannot be an element name.
+        /// </remarks>
+        public static bool WaveformAutoFit
+        {
+            get => SettingHelper.Get("WaveformAutoFit", true, Domain);
+            set => SettingHelper.Set("WaveformAutoFit", value, Domain);
+        }
+
+        /// <summary>Mark waveform columns that the lane edge cut off.</summary>
+        public static bool WaveformShowClipping
+        {
+            get => SettingHelper.Get("WaveformShowClipping", true, Domain);
+            set => SettingHelper.Set("WaveformShowClipping", value, Domain);
+        }
+
         /// <summary>Hover readout layout: labelled rows (default) or a single compact line.</summary>
         public static HoverReadoutStyle HoverStyle
         {

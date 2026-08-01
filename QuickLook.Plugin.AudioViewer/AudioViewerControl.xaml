@@ -304,6 +304,18 @@
             <TextBlock Text="Applies to stereo files. Mono and multichannel always show one lane per channel."
                        Style="{StaticResource SettingsFieldLabel}" TextWrapping="Wrap" Margin="0,2,0,8"/>
 
+            <CheckBox x:Name="AutoFitCheck" Content="Auto-fit quiet waveforms"
+                      Foreground="{DynamicResource PrimaryText}"
+                      Checked="AutoFitCheck_Changed" Unchecked="AutoFitCheck_Changed"
+                      ToolTip="Magnify a quiet file so its waveform fills the lane"/>
+            <TextBlock Text="Alt + wheel zooms vertically; 0 resets. A badge shows the factor whenever the waveform is magnified."
+                       Style="{StaticResource SettingsFieldLabel}" TextWrapping="Wrap" Margin="0,2,0,4"/>
+
+            <CheckBox x:Name="ClipMarkCheck" Content="Mark clipped columns"
+                      Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,8"
+                      Checked="ClipMarkCheck_Changed" Unchecked="ClipMarkCheck_Changed"
+                      ToolTip="Highlight columns whose peaks the lane edge cut off"/>
+
             <!-- ===== LAYOUT: the header doubles as this group's only field label ===== -->
             <Border Style="{StaticResource SettingsSeparator}"/>
             <TextBlock Text="LAYOUT" Style="{StaticResource SettingsSectionHeader}"/>
@@ -411,6 +423,23 @@
                    Text="Loading…"/>
 
         <!-- Hover readout (time · frequency · level under the cursor). -->
+        <!-- Vertical-zoom badge. Sits outside the scrolling Timeline so it stays put, and
+             is only visible while the waveform is magnified: a stretched waveform must
+             never be mistaken for the file's real level. -->
+        <Border x:Name="GainBadge" HorizontalAlignment="Left" VerticalAlignment="Top"
+                Margin="6,6,0,0" Visibility="Collapsed"
+                Background="{DynamicResource OverlayBackground}" BorderBrush="{DynamicResource OverlayBorder}"
+                BorderThickness="1" CornerRadius="3" Padding="6,2">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock x:Name="GainBadgeText" Foreground="{DynamicResource OverlayText}"
+                       FontFamily="Consolas, Courier New" FontSize="11" VerticalAlignment="Center"/>
+            <Button x:Name="GainResetButton" Content="reset" Margin="8,0,0,0" Padding="4,0"
+                    FontSize="11" Background="Transparent" BorderThickness="0"
+                    Foreground="{DynamicResource OverlayText}" Cursor="Hand"
+                    Click="GainResetButton_Click" ToolTip="Reset vertical zoom to 1x (0)"/>
+          </StackPanel>
+        </Border>
+
         <Border x:Name="HoverReadout" HorizontalAlignment="Left" VerticalAlignment="Top"
                 Background="{DynamicResource OverlayBackground}" BorderBrush="{DynamicResource OverlayBorder}"
                 BorderThickness="1" CornerRadius="3" Padding="6,3" Visibility="Collapsed"

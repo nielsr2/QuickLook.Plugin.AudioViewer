@@ -33,7 +33,11 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         // flight for the same key.
         private WaveformData _requestedWaveform;   // last-requested key (waveform ref)
         private int _requestedLanePx = -1;         // last-requested key (lanePixelHeight)
+        private double _requestedGain = double.NaN; // last-requested key (vertical gain)
         private int _bitmapGeneration;             // staleness guard for async completions
+
+        private double _gain = 1.0;
+        private bool _showClipping;
 
         public event Action<double> SeekRequested;
 
@@ -62,20 +66,17 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         }
 
         /// <summary>Re-color the waveform for the current light/dark theme, then redraw.</summary>
-        public void SetTheme(Color wave, Color playhead, Color background)
+        public void SetTheme(Color wave, Color playhead, Color background, Color? clip = null)
         {
             WaveBrush = FrozenBrush(wave);
             PlayheadBrush = FrozenBrush(playhead);
             BackgroundBrush = FrozenBrush(background);
+            if (clip.HasValue) ClipColor = clip.Value;
             // The pens capture their brush at construction, and the wave bitmap bakes in
             // the wave/background colors, so both must be rebuilt — not just invalidated —
             // or a theme switch after load leaves the playhead and the lanes in the old colors.
             RebuildPens();
-            _waveBitmap = null;
-            _requestedWaveform = null;
-            _requestedLanePx = -1;
-            _bitmapGeneration++;
-            InvalidateVisual();
+            InvalidateWaveBitmap();
         }
 
         // Built outside OnRender: the playhead invalidates ~30 Hz, so re-allocating and
@@ -110,6 +111,61 @@ namespace QuickLook.Plugin.AudioViewer.Controls
                 InvalidateMeasure();
                 InvalidateVisual();
             }
+        }
+
+        /// <summary>
+        /// Vertical magnification of the envelope. The colour is baked into the cached
+        /// bitmap and so is the height, so a change here must invalidate exactly what
+        /// <see cref="SetTheme"/> invalidates.
+        /// </summary>
+        /// <remarks>
+        /// A WPF ScaleTransform around the blit would be free but wrong: the cached bitmap
+        /// has already quantised each column to whole pixels, so scaling it just makes
+        /// those blocks taller. The sub-pixel detail the user is magnifying to see only
+        /// exists in the float envelope, so it has to be re-rasterized from there.
+        /// </remarks>
+        public double Gain
+        {
+            get => _gain;
+            set
+            {
+                double g = value;
+                if (double.IsNaN(g) || double.IsInfinity(g) || g <= 0) g = 1.0;
+                if (g > Audio.WaveformGain.MaxGain) g = Audio.WaveformGain.MaxGain;
+                if (g == _gain) return;
+
+                _gain = g;
+                InvalidateWaveBitmap();
+            }
+        }
+
+        /// <summary>Mark columns whose envelope the lane edge cut off.</summary>
+        public bool ShowClipping
+        {
+            get => _showClipping;
+            set
+            {
+                if (value == _showClipping) return;
+                _showClipping = value;
+                InvalidateWaveBitmap();
+            }
+        }
+
+        /// <summary>Colour for clipped columns; set alongside the rest of the theme.</summary>
+        public Color ClipColor { get; set; } = Color.FromRgb(0xFF, 0xB3, 0x00);
+
+        /// <summary>
+        /// Drop the cached bitmap and both rebuild keys, and bump the generation so an
+        /// in-flight rebuild for the previous key is discarded when it lands.
+        /// </summary>
+        private void InvalidateWaveBitmap()
+        {
+            _waveBitmap = null;
+            _requestedWaveform = null;
+            _requestedLanePx = -1;
+            _requestedGain = double.NaN;
+            _bitmapGeneration++;
+            InvalidateVisual();
         }
 
         public double PlayheadFraction
@@ -158,23 +214,28 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             double dpiY = VisualTreeHelper.GetDpi(this).DpiScaleY;
             int lanePixelHeight = Math.Max(1, (int)Math.Round(laneHeightDIP * dpiY));
 
-            // Rebuild off-thread if stale: the bitmap must match the current waveform ref
-            // AND lanePixelHeight. Guard on the last-requested key so we don't spawn a
+            // Rebuild off-thread if stale: the bitmap must match the current waveform ref,
+            // lanePixelHeight AND gain. Guard on the last-requested key so we don't spawn a
             // duplicate rebuild every OnRender while one is already in flight for this key.
-            if (!ReferenceEquals(_requestedWaveform, _waveform) || _requestedLanePx != lanePixelHeight)
+            if (!ReferenceEquals(_requestedWaveform, _waveform)
+                || _requestedLanePx != lanePixelHeight
+                || _requestedGain != _gain)
             {
                 _requestedWaveform = _waveform;
                 _requestedLanePx = lanePixelHeight;
+                _requestedGain = _gain;
 
                 int gen = ++_bitmapGeneration;
                 var wf = _waveform;
                 int lph = lanePixelHeight;
                 int waveArgb = ToArgb(WaveBrush);
                 int bgArgb = ToArgb(BackgroundBrush);
+                double gain = _gain;
+                int? clipArgb = _showClipping ? ToArgb(FrozenBrush(ClipColor)) : (int?)null;
 
                 Task.Run(() =>
                 {
-                    var px = WaveformRasterizer.RenderPixels(wf, lph, waveArgb, bgArgb);
+                    var px = WaveformRasterizer.RenderPixels(wf, lph, waveArgb, bgArgb, gain, clipArgb);
                     var bmp = WaveformRasterizer.ToBitmap(px, wf.Columns, wf.ChannelCount * lph);
                     bmp.Freeze();
                     Dispatcher.BeginInvoke((Action)(() =>

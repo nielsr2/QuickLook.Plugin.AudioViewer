@@ -26,10 +26,23 @@ namespace QuickLook.Plugin.AudioViewer.Audio
         /// Width equals <see cref="WaveformData.Columns"/>; height equals
         /// <see cref="WaveformData.ChannelCount"/> * <paramref name="lanePixelHeight"/>.
         /// </summary>
-        internal static int[] RenderPixels(WaveformData wf, int lanePixelHeight, int waveArgb, int backgroundArgb)
+        /// <param name="gain">
+        /// Vertical magnification. Applied here rather than to <see cref="WaveformData"/>
+        /// so the stored envelope stays a true record of the file's sample peaks — the
+        /// amplitude ruler and the auto-fit calculation both need those untouched, and a
+        /// gain change costs one re-raster rather than a re-scan.
+        /// </param>
+        /// <param name="clipArgb">
+        /// Colour for the single row marking a column whose envelope was cut off by the
+        /// lane edge. Null (the default) paints those rows in <paramref name="waveArgb"/>
+        /// like any other, i.e. no clip indication.
+        /// </param>
+        internal static int[] RenderPixels(WaveformData wf, int lanePixelHeight, int waveArgb, int backgroundArgb,
+            double gain = 1.0, int? clipArgb = null)
         {
             if (wf == null) throw new ArgumentNullException(nameof(wf));
             if (lanePixelHeight < 1) throw new ArgumentOutOfRangeException(nameof(lanePixelHeight));
+            if (double.IsNaN(gain) || double.IsInfinity(gain) || gain <= 0) gain = 1.0;
 
             int width = wf.Columns;
             int channels = wf.ChannelCount;
@@ -38,7 +51,9 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             var pixels = new int[width * height];
             for (int i = 0; i < pixels.Length; i++) pixels[i] = backgroundArgb;
 
-            double half = lanePixelHeight / 2.0;
+            // Fold the gain into the half-lane height once per call: the inner loop is
+            // unchanged, so magnification costs nothing per pixel.
+            double half = lanePixelHeight / 2.0 * gain;
 
             for (int c = 0; c < channels; c++)
             {
@@ -57,6 +72,11 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                     int yTop = (int)Math.Round(yTopD, MidpointRounding.AwayFromZero);
                     int yBot = (int)Math.Round(yBotD, MidpointRounding.AwayFromZero);
 
+                    // Note before clamping: at high gain the envelope runs past the lane,
+                    // and a flat-topped waveform otherwise reads as a limited signal rather
+                    // than as content scrolled out of view.
+                    bool clipped = yTop < laneTop || yBot > laneBottom;
+
                     if (yTop < laneTop) yTop = laneTop;
                     if (yTop > laneBottom) yTop = laneBottom;
                     if (yBot < laneTop) yBot = laneTop;
@@ -68,6 +88,12 @@ namespace QuickLook.Plugin.AudioViewer.Audio
 
                     for (int y = yTop; y <= yBot; y++)
                         pixels[y * width + x] = waveArgb;
+
+                    if (clipped && clipArgb.HasValue)
+                    {
+                        pixels[laneTop * width + x] = clipArgb.Value;
+                        pixels[laneBottom * width + x] = clipArgb.Value;
+                    }
                 }
             }
 

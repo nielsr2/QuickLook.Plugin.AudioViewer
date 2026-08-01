@@ -52,6 +52,10 @@ namespace QuickLook.Plugin.AudioViewer
         // no re-scan. Progressive snapshots overwrite it as the scan fills in.
         private WaveformData _waveformData;
 
+        // Vertical magnification of the waveform. Session-only and deliberately not
+        // persisted: it belongs to the file being viewed, not to the user.
+        private double _waveformGain = 1.0;
+
         // Cached linear STFT frames so setting changes re-render without re-running
         // the FFT; only an FFT-size change forces a recompute.
         private float[][] _spectrogramFrames;
@@ -140,7 +144,8 @@ namespace QuickLook.Plugin.AudioViewer
             _isDark = ThemePalette.ResolveIsDark(PluginSettings.ThemeMode, _context?.Theme ?? Themes.None);
             ThemePalette.Apply(Resources, _isDark);
             Waveform.SetTheme(ThemePalette.ResolveWaveColor(PluginSettings.WaveColorHex, _isDark),
-                ThemePalette.Playhead(_isDark), ThemePalette.WaveformBackground(_isDark));
+                ThemePalette.Playhead(_isDark), ThemePalette.WaveformBackground(_isDark),
+                ThemePalette.WaveformClip(_isDark));
 
             var axisText = ThemePalette.AxisText(_isDark);
             var axisLine = ThemePalette.AxisLine(_isDark);
@@ -173,6 +178,45 @@ namespace QuickLook.Plugin.AudioViewer
             ApplyTheme(rerender: true);
         }
 
+        /// <summary>
+        /// Apply a vertical magnification and keep the badge in sync. The badge is the
+        /// user-visible signal that the waveform is not at its natural scale — without it
+        /// an auto-fitted quiet file looks like a loud one.
+        /// </summary>
+        private void SetWaveformGain(double gain, bool fromAutoFit)
+        {
+            if (gain < 1.0) gain = 1.0;
+            if (gain > WaveformGain.MaxGain) gain = WaveformGain.MaxGain;
+
+            _waveformGain = gain;
+            Waveform.ShowClipping = PluginSettings.WaveformShowClipping;
+            Waveform.Gain = gain;
+
+            bool magnified = gain > 1.0 + 1e-9;
+            GainBadge.Visibility = magnified ? Visibility.Visible : Visibility.Collapsed;
+            if (magnified)
+                GainBadgeText.Text = (fromAutoFit ? "Auto-fit " : "Zoom ") + WaveformGain.FormatGain(gain);
+        }
+
+        /// <summary>
+        /// Fit the waveform to the file once the full scan is in.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately not run on the progressive snapshots: those arrive ~10 times with
+        /// partially-filled data, so re-fitting each time would make the waveform visibly
+        /// breathe as the scan discovers louder material. One settle at the end is fine.
+        /// </remarks>
+        private void ApplyAutoFit()
+        {
+            if (!PluginSettings.WaveformAutoFit || _waveformData == null) return;
+            var shown = StereoWaveform.Apply(_waveformData, PluginSettings.StereoMode);
+            double fit = WaveformGain.FitToPercentile(shown);
+            if (fit > 1.0 + 1e-9) SetWaveformGain(fit, fromAutoFit: true);
+        }
+
+        private void GainResetButton_Click(object sender, RoutedEventArgs e)
+            => SetWaveformGain(1.0, fromAutoFit: false);
+
         private void OnWaveformSeek(double fraction)
         {
             if (_player == null || _scrubbing) return;
@@ -193,6 +237,8 @@ namespace QuickLook.Plugin.AudioViewer
             NoteLayerCheck.IsChecked = PluginSettings.NoteLayerEnabled;
             LayoutCombo.SelectedIndex = (int)PluginSettings.Layout;
             StereoModeCombo.SelectedIndex = (int)PluginSettings.StereoMode;
+            AutoFitCheck.IsChecked = PluginSettings.WaveformAutoFit;
+            ClipMarkCheck.IsChecked = PluginSettings.WaveformShowClipping;
             FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
             AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
             ColorCombo.SelectedIndex = (int)PluginSettings.Colormap;
@@ -456,6 +502,7 @@ namespace QuickLook.Plugin.AudioViewer
                     waveformFinalized = true;
                     _waveformData = result;
                     RefreshWaveformForMode();
+                    ApplyAutoFit();   // once, on the complete scan — see ApplyAutoFit
                     // Only collapse the status line if it still shows our Phase-1 message — the
                     // Stacked spectrogram path may have replaced it with its own status.
                     if (StatusText.Text == "Analyzing waveform…")
@@ -656,6 +703,12 @@ namespace QuickLook.Plugin.AudioViewer
                 case Key.Add: AdjustVolume(0.05); e.Handled = true; break;
                 case Key.OemMinus:
                 case Key.Subtract: AdjustVolume(-0.05); e.Handled = true; break;
+
+                // Reset vertical zoom. "0" is the usual reset-zoom key and is unclaimed
+                // here; +/- deliberately stay on volume rather than changing meaning
+                // depending on where the pointer happens to be.
+                case Key.D0:
+                case Key.NumPad0: SetWaveformGain(1.0, fromAutoFit: false); e.Handled = true; break;
             }
         }
 
@@ -854,6 +907,23 @@ namespace QuickLook.Plugin.AudioViewer
             if (mode == LayoutMode.Stacked) ShowSpectrogramAsync(false);
         }
 
+        private void AutoFitCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.WaveformAutoFit = AutoFitCheck.IsChecked == true;
+            // Apply or undo immediately so the effect of the toggle is visible without
+            // reopening the preview.
+            if (PluginSettings.WaveformAutoFit) ApplyAutoFit();
+            else SetWaveformGain(1.0, fromAutoFit: false);
+        }
+
+        private void ClipMarkCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.WaveformShowClipping = ClipMarkCheck.IsChecked == true;
+            Waveform.ShowClipping = PluginSettings.WaveformShowClipping;
+        }
+
         private void StereoModeCombo_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (_initializingSettings || StereoModeCombo.SelectedIndex < 0) return;
@@ -955,6 +1025,22 @@ namespace QuickLook.Plugin.AudioViewer
         // (the ScrollViewer only scrolls horizontally, so the wheel does nothing by default).
         private void ViewScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
+            // Alt + wheel over the waveform magnifies it vertically.
+            //
+            // This has to come first, before the lane-stack bail-out below, because this is
+            // a tunnelling PreviewMouseWheel on ViewScroll and WaveScroll would otherwise
+            // consume the event. Alt rather than Ctrl: Ctrl is the conventional zoom
+            // modifier and is reserved for a future time zoom, which is the more common
+            // need. The plain wheel is already fully spoken for — horizontal timeline for
+            // mono/stereo, vertical lanes for multichannel — so there is no unmodified
+            // gesture left to take.
+            if (Keyboard.Modifiers == ModifierKeys.Alt && WaveScroll.IsVisible && WaveScroll.IsMouseOver)
+            {
+                SetWaveformGain(WaveformGain.Step(_waveformGain, e.Delta > 0 ? +1 : -1), fromAutoFit: false);
+                e.Handled = true;
+                return;
+            }
+
             // Wheel over a vertically-scrollable lane stack (many-channel files) scrolls
             // the lanes instead — otherwise this preview handler (which tunnels before
             // WaveScroll's own bubbling handler ever sees the event) would swallow it for

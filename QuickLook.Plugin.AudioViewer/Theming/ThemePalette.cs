@@ -121,6 +121,11 @@ namespace QuickLook.Plugin.AudioViewer.Theming
         internal static Color WaveformWave(bool isDark) => Hex(isDark ? "#FF4FC3F7" : "#FF0277BD");
         internal static Color Playhead(bool isDark) => Hex(isDark ? "#FFFF5252" : "#FFD32F2F");
         internal static Color WaveformBackground(bool isDark) => Hex(isDark ? "#FF1E1E1E" : "#FFF5F5F5");
+        /// <summary>
+        /// Marks waveform columns the lane edge cut off. Amber, so it is unmistakable
+        /// against both the cyan/blue wave and the red playhead.
+        /// </summary>
+        internal static Color WaveformClip(bool isDark) => Hex(isDark ? "#FFFFB300" : "#FFE65100");
         internal static Color AxisText(bool isDark) => Hex(isDark ? "#FFBBBBBB" : "#FF555555");
         internal static Color AxisLine(bool isDark) => Hex(isDark ? "#FF6E6E6E" : "#FFAAAAAA");
 

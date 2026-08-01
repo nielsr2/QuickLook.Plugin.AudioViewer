@@ -2,6 +2,8 @@ using System.IO;
 using QuickLook.Plugin.AudioViewer.Audio;
 using Xunit;
 
+// Gain and clip-indication coverage lives in WaveformRasterizerGainTests.
+
 namespace QuickLook.Plugin.AudioViewer.Tests
 {
     public class WaveformRasterizerTests
