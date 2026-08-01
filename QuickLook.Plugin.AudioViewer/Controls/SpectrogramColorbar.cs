@@ -43,6 +43,14 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             InvalidateVisual();
         }
 
+        // OnRender is not re-invoked for a size change alone, and the gradient band and its
+        // labels are sized from ActualHeight. See the note on TimeRuler.OnRenderSizeChanged.
+        protected override void OnRenderSizeChanged(SizeChangedInfo info)
+        {
+            base.OnRenderSizeChanged(info);
+            InvalidateVisual();
+        }
+
         protected override void OnRender(DrawingContext dc)
         {
             double w = ActualWidth, h = ActualHeight;

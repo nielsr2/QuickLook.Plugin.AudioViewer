@@ -36,6 +36,20 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             InvalidateVisual();
         }
 
+        /// <summary>
+        /// WPF re-arranges on a size change but does not re-invoke <see cref="OnRender"/>;
+        /// the visual keeps whatever drawing it already has. This ruler's Width is bound to
+        /// the timeline's ActualWidth, which is only known after layout runs — while
+        /// Configure's InvalidateVisual fires before it. Without re-invalidating here the
+        /// axis keeps the ticks it computed at the initial, viewport-sized width, so on a
+        /// long file the labels cover only the first screenful and then stop.
+        /// </summary>
+        protected override void OnRenderSizeChanged(SizeChangedInfo info)
+        {
+            base.OnRenderSizeChanged(info);
+            InvalidateVisual();
+        }
+
         protected override void OnRender(DrawingContext dc)
         {
             double w = ActualWidth, h = ActualHeight;
