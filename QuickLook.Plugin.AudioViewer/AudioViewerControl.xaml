@@ -224,8 +224,32 @@
               <ComboBoxItem Content="Heat"/>
             </ComboBox>
 
-            <CheckBox x:Name="ReverseCheck" Content="Reverse colormap" Foreground="{DynamicResource PrimaryText}"
-                      Checked="ReverseCheck_Changed" Unchecked="ReverseCheck_Changed"/>
+            <!-- Order is load-bearing: the handler casts SelectedIndex to ReverseColormapMode. -->
+            <TextBlock Text="Reverse colormap" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="ReverseCombo" SelectionChanged="ReverseCombo_Changed">
+              <ComboBoxItem Content="Never"/>
+              <ComboBoxItem Content="Always"/>
+              <ComboBoxItem Content="Auto (light mode only)"/>
+            </ComboBox>
+            <TextBlock Text="Auto flips the map to its light-based form whenever the light theme is active, so it suits a light background and prints sensibly."
+                       Style="{StaticResource SettingsFieldLabel}" TextWrapping="Wrap" Margin="0,2,0,8"/>
+
+            <!-- ===== THEME: palette selection and the waveform's own colour ===== -->
+            <Border Style="{StaticResource SettingsSeparator}"/>
+            <TextBlock Text="THEME" Style="{StaticResource SettingsSectionHeader}"/>
+
+            <!-- Order is load-bearing: the handler casts SelectedIndex to ThemeMode. -->
+            <TextBlock Text="Appearance" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="ThemeCombo" Margin="0,0,0,8" SelectionChanged="ThemeCombo_Changed">
+              <ComboBoxItem Content="Follow QuickLook"/>
+              <ComboBoxItem Content="Light"/>
+              <ComboBoxItem Content="Dark"/>
+            </ComboBox>
+
+            <!-- Items are generated from ThemePalette.WavePalette so the list and the
+                 stored hex values cannot drift apart. -->
+            <TextBlock Text="Waveform colour" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="WaveColorCombo" Margin="0,0,0,8" SelectionChanged="WaveColorCombo_Changed"/>
 
             <!-- ===== OVERLAYS: what is drawn on top, and the cursor readout ===== -->
             <Border Style="{StaticResource SettingsSeparator}"/>

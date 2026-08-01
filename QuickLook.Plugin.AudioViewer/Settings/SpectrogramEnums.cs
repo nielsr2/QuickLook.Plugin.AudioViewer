@@ -93,4 +93,40 @@ namespace QuickLook.Plugin.AudioViewer.Settings
         /// <summary>Both terms, e.g. "A4 +2¢  ·  440 Hz" (default).</summary>
         Both
     }
+
+    /// <summary>Which light/dark palette the viewer uses.</summary>
+    /// <remarks>
+    /// Members are appended, never reordered: the settings combo casts its SelectedIndex
+    /// straight to this enum, so the XAML item order must stay in lockstep.
+    /// </remarks>
+    public enum ThemeMode
+    {
+        /// <summary>Take QuickLook's theme, falling back to the OS app theme (default).</summary>
+        FollowHost,
+        /// <summary>Always the light palette, whatever the host reports.</summary>
+        Light,
+        /// <summary>Always the dark palette, whatever the host reports.</summary>
+        Dark
+    }
+
+    /// <summary>When the spectrogram colormap is inverted.</summary>
+    /// <remarks>
+    /// Replaces the pre-1.6 ReverseColormap bool. A separate "auto-invert in light mode"
+    /// switch alongside that bool would have created a double negative — ticking both in
+    /// light mode gives back the un-inverted map — with no way to tell a deliberate
+    /// "false" from the default one. Folding both into a single three-way choice removes
+    /// the ambiguity entirely.
+    ///
+    /// Members are appended, never reordered: the settings combo casts its SelectedIndex
+    /// straight to this enum, so the XAML item order must stay in lockstep.
+    /// </remarks>
+    public enum ReverseColormapMode
+    {
+        /// <summary>Never invert (default).</summary>
+        Never,
+        /// <summary>Always invert, in either theme.</summary>
+        Always,
+        /// <summary>Invert only in light mode, so light-based maps suit a light background.</summary>
+        AutoLight
+    }
 }

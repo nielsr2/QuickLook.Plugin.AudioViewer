@@ -136,11 +136,37 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("DbFloor", value, Domain);
         }
 
-        /// <summary>Invert the colormap so high magnitudes map to its dark end (and vice versa).</summary>
-        public static bool ReverseColormap
+        /// <summary>When the colormap is inverted: never, always, or only in light mode.</summary>
+        public static ReverseColormapMode ReverseMode
         {
-            get => SettingHelper.Get("ReverseColormap", false, Domain);
-            set => SettingHelper.Set("ReverseColormap", value, Domain);
+            get
+            {
+                // Carry the pre-1.6 bool forward: someone who had Reverse ticked keeps an
+                // inverted map rather than silently reverting to Never on upgrade.
+                var fallback = SettingHelper.Get("ReverseColormap", false, Domain)
+                    ? ReverseColormapMode.Always
+                    : ReverseColormapMode.Never;
+                return ParseEnum("ReverseMode", fallback);
+            }
+            set => SettingHelper.Set("ReverseMode", value.ToString(), Domain);
+        }
+
+        /// <summary>Light/dark palette selection; defaults to following QuickLook.</summary>
+        public static ThemeMode ThemeMode
+        {
+            get => ParseEnum("ThemeMode", ThemeMode.FollowHost);
+            set => SettingHelper.Set("ThemeMode", value.ToString(), Domain);
+        }
+
+        /// <summary>
+        /// Waveform colour as an ARGB hex string, or "" to follow the theme's own blue.
+        /// Stored as text because SettingHelper round-trips through Convert.ChangeType,
+        /// which cannot handle a Color; never store null (Set would throw on GetType).
+        /// </summary>
+        public static string WaveColorHex
+        {
+            get => SettingHelper.Get("WaveColorHex", string.Empty, Domain) ?? string.Empty;
+            set => SettingHelper.Set("WaveColorHex", value ?? string.Empty, Domain);
         }
 
         /// <summary>Gamma applied to the normalized magnitude before coloring; &lt;1 lifts quiet detail.</summary>

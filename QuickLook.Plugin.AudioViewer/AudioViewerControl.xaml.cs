@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -115,6 +116,9 @@ namespace QuickLook.Plugin.AudioViewer
             _path = path;
             _context = context;
             ApplyTheme();
+            // The host may resolve or change its theme after we are built; without this the
+            // viewer would keep whatever palette it snapshotted here. Detached in Unload().
+            if (_context != null) _context.PropertyChanged += OnContextPropertyChanged;
             AutoPlayCheck.IsChecked = PluginSettings.AutoPlay;
             InitSettingsControls();
             Waveform.SeekRequested += OnWaveformSeek; // click/drag on the waveform seeks
@@ -122,12 +126,20 @@ namespace QuickLook.Plugin.AudioViewer
             Loaded += OnLoaded;
         }
 
-        /// <summary>Resolve and apply the light/dark palette from QuickLook's theme.</summary>
-        private void ApplyTheme()
+        /// <summary>
+        /// Resolve and apply the light/dark palette, letting the user's ThemeMode override
+        /// QuickLook's own theme, and honouring a custom waveform colour.
+        /// </summary>
+        /// <param name="rerender">
+        /// Re-run the spectrogram and axes too. Skipped during construction, where no
+        /// audio is loaded yet; needed whenever the palette changes afterwards, because
+        /// the AutoLight reverse mode makes the image itself theme-dependent.
+        /// </param>
+        private void ApplyTheme(bool rerender = false)
         {
-            _isDark = ThemePalette.ResolveIsDark(_context?.Theme ?? Themes.None);
+            _isDark = ThemePalette.ResolveIsDark(PluginSettings.ThemeMode, _context?.Theme ?? Themes.None);
             ThemePalette.Apply(Resources, _isDark);
-            Waveform.SetTheme(ThemePalette.WaveformWave(_isDark),
+            Waveform.SetTheme(ThemePalette.ResolveWaveColor(PluginSettings.WaveColorHex, _isDark),
                 ThemePalette.Playhead(_isDark), ThemePalette.WaveformBackground(_isDark));
 
             var axisText = ThemePalette.AxisText(_isDark);
@@ -137,6 +149,28 @@ namespace QuickLook.Plugin.AudioViewer
             Colorbar.SetTheme(axisText);
             Notes.SetTheme(ThemePalette.NoteFill(_isDark), ThemePalette.NoteBorder(_isDark),
                 ThemePalette.NoteSelected(_isDark));
+
+            if (rerender && _spectrogramBuilt)
+            {
+                RenderSpectrogram();
+                RefreshAxes();
+            }
+        }
+
+        /// <summary>
+        /// QuickLook can resolve or change its theme after this control is constructed.
+        /// ApplyTheme used to run once from the ctor and nothing listened for a later
+        /// change, so the viewer could keep a palette the host had already moved on from —
+        /// and since the OS-theme lookup falls back to dark on failure, that stuck palette
+        /// was usually the dark one.
+        /// </summary>
+        private void OnContextPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(ContextObject.Theme)) return;
+            if (_unloaded) return;
+            // Only the host theme moved; an explicit user choice must still win.
+            if (PluginSettings.ThemeMode != ThemeMode.FollowHost) return;
+            ApplyTheme(rerender: true);
         }
 
         private void OnWaveformSeek(double fraction)
@@ -158,13 +192,56 @@ namespace QuickLook.Plugin.AudioViewer
             FreqCombo.SelectedIndex = (int)PluginSettings.FreqScale;
             AmpCombo.SelectedIndex = (int)PluginSettings.AmpScale;
             ColorCombo.SelectedIndex = (int)PluginSettings.Colormap;
-            ReverseCheck.IsChecked = PluginSettings.ReverseColormap;
+            ReverseCombo.SelectedIndex = (int)PluginSettings.ReverseMode;
+            ThemeCombo.SelectedIndex = (int)PluginSettings.ThemeMode;
+            InitWaveColorCombo();
             GammaSlider.Value = PluginSettings.Gamma;
             FftCombo.SelectedIndex = Math.Max(0, Array.IndexOf(FftSizes, PluginSettings.FftSize));
             MaxFreqCombo.SelectedIndex = Math.Max(0, Array.IndexOf(MaxFreqs, PluginSettings.MaxFrequencyHz));
             ContrastSlider.Value = PluginSettings.DbFloor;
             ApplySettingsPaneSize();
             _initializingSettings = false;
+        }
+
+        /// <summary>
+        /// Populate the waveform-colour list from <see cref="ThemePalette.WavePalette"/>,
+        /// each row carrying a swatch of the colour it selects. Generated rather than
+        /// authored in XAML so the visible list and the persisted hex values cannot drift.
+        /// </summary>
+        private void InitWaveColorCombo()
+        {
+            WaveColorCombo.Items.Clear();
+            string current = PluginSettings.WaveColorHex ?? string.Empty;
+            int selected = 0;
+
+            var palette = ThemePalette.WavePalette;
+            for (int i = 0; i < palette.Length; i++)
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal };
+                row.Children.Add(new System.Windows.Shapes.Rectangle
+                {
+                    Width = 12,
+                    Height = 12,
+                    RadiusX = 2,
+                    RadiusY = 2,
+                    Margin = new Thickness(0, 0, 6, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    // "Theme default" has no hex, so its swatch shows the current theme's blue.
+                    Fill = new System.Windows.Media.SolidColorBrush(
+                        ThemePalette.ResolveWaveColor(palette[i].Hex, _isDark))
+                });
+                row.Children.Add(new TextBlock
+                {
+                    Text = palette[i].Name,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                WaveColorCombo.Items.Add(new ComboBoxItem { Content = row });
+
+                if (string.Equals(palette[i].Hex ?? string.Empty, current, StringComparison.OrdinalIgnoreCase))
+                    selected = i;
+            }
+
+            WaveColorCombo.SelectedIndex = selected;
         }
 
         /// <summary>Show the channel selector only for files with more than 2 channels, and populate it.</summary>
@@ -794,11 +871,37 @@ namespace QuickLook.Plugin.AudioViewer
             RenderSpectrogram();
         }
 
-        private void ReverseCheck_Changed(object sender, RoutedEventArgs e)
+        private void ReverseCombo_Changed(object sender, SelectionChangedEventArgs e)
         {
-            if (_initializingSettings) return;
-            PluginSettings.ReverseColormap = ReverseCheck.IsChecked == true;
+            if (_initializingSettings || ReverseCombo.SelectedIndex < 0) return;
+            PluginSettings.ReverseMode = (ReverseColormapMode)ReverseCombo.SelectedIndex;
             RenderSpectrogram();
+            RefreshAxes();   // the colorbar gradient mirrors the same inversion
+        }
+
+        private void ThemeCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || ThemeCombo.SelectedIndex < 0) return;
+            PluginSettings.ThemeMode = (ThemeMode)ThemeCombo.SelectedIndex;
+            ApplyTheme(rerender: true);
+
+            // The "Theme default" swatch tracks the palette, so rebuild the list. Guarded
+            // because repopulating the combo re-fires SelectionChanged.
+            _initializingSettings = true;
+            InitWaveColorCombo();
+            _initializingSettings = false;
+        }
+
+        private void WaveColorCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || WaveColorCombo.SelectedIndex < 0) return;
+            int i = WaveColorCombo.SelectedIndex;
+            if (i >= ThemePalette.WavePalette.Length) return;
+            PluginSettings.WaveColorHex = ThemePalette.WavePalette[i].Hex ?? string.Empty;
+            // Goes through SetTheme, which rebuilds the pens and drops the cached wave
+            // bitmap — the colour is baked into those pixels, so nothing short of a
+            // re-raster will change it.
+            ApplyTheme();
         }
 
         private void GammaSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1012,7 +1115,7 @@ namespace QuickLook.Plugin.AudioViewer
                 FrequencyScale = PluginSettings.FreqScale,
                 AmplitudeScale = PluginSettings.AmpScale,
                 Colormap = PluginSettings.Colormap,
-                ReverseColormap = PluginSettings.ReverseColormap,
+                ReverseColormap = ThemePalette.ResolveReverse(PluginSettings.ReverseMode, _isDark),
                 Gamma = PluginSettings.Gamma,
                 DbFloor = PluginSettings.DbFloor,
                 MaxFrequencyHz = PluginSettings.MaxFrequencyHz
@@ -1098,7 +1201,7 @@ namespace QuickLook.Plugin.AudioViewer
             double fMax = FrequencyScaleMapper.EffectiveFMax(_spectrogramSampleRate, PluginSettings.MaxFrequencyHz);
             FreqRuler.Configure(scale, fMin, fMax, _specTopFraction);
             Colorbar.Configure(PluginSettings.Colormap, _lastLevels, _specTopFraction,
-                PluginSettings.ReverseColormap, PluginSettings.Gamma);
+                ThemePalette.ResolveReverse(PluginSettings.ReverseMode, _isDark), PluginSettings.Gamma);
             FreqRuler.Visibility = Visibility.Visible;
             Colorbar.Visibility = Visibility.Visible;
             RefreshNotes(); // re-align the note overlay on the same scale/fMin/fMax
@@ -1379,6 +1482,9 @@ namespace QuickLook.Plugin.AudioViewer
         {
             _unloaded = true;   // stop every in-flight async continuation from touching the control
             if (_hwndSource != null) { _hwndSource.RemoveHook(WndHook); _hwndSource = null; }
+            // The ContextObject belongs to the host and outlives this preview, so a live
+            // handler here would root the control and its FFT frames for the host's lifetime.
+            if (_context != null) _context.PropertyChanged -= OnContextPropertyChanged;
             _cts.Cancel();      // abort in-flight decode/FFT so it doesn't run on a dead control
             _timer?.Stop();
             _player?.Dispose(); // disposes the WASAPI output and releases the file handle

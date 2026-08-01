@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using QuickLook.Common.Helpers;
 using QuickLook.Common.Plugin;
+using QuickLook.Plugin.AudioViewer.Settings;
 
 namespace QuickLook.Plugin.AudioViewer.Theming
 {
@@ -22,6 +23,65 @@ namespace QuickLook.Plugin.AudioViewer.Theming
             if (theme == Themes.Dark) return true;
             try { return OSThemeHelper.AppsUseDarkTheme(); }
             catch { return true; }
+        }
+
+        /// <summary>
+        /// Resolve the effective palette, letting an explicit user choice override the host.
+        /// </summary>
+        internal static bool ResolveIsDark(ThemeMode mode, Themes hostTheme)
+        {
+            switch (mode)
+            {
+                case ThemeMode.Light: return false;
+                case ThemeMode.Dark: return true;
+                default: return ResolveIsDark(hostTheme);
+            }
+        }
+
+        /// <summary>Whether the colormap should be inverted for this mode and palette.</summary>
+        internal static bool ResolveReverse(ReverseColormapMode mode, bool isDark)
+        {
+            switch (mode)
+            {
+                case ReverseColormapMode.Always: return true;
+                case ReverseColormapMode.AutoLight: return !isDark;
+                default: return false;
+            }
+        }
+
+        /// <summary>
+        /// The waveform colour choices offered in settings. A null hex means "follow the
+        /// theme", i.e. <see cref="WaveformWave"/>; the rest are absolute and stay put in
+        /// either palette, which is what makes them a deliberate user choice.
+        /// Deliberately excludes red — it would be mistaken for the playhead.
+        /// </summary>
+        internal static readonly (string Name, string Hex)[] WavePalette =
+        {
+            ("Theme default", null),
+            ("Blue",          "#FF4FC3F7"),
+            ("Teal",          "#FF26C6DA"),
+            ("Green",         "#FF66BB6A"),
+            ("Lime",          "#FFAEEA00"),
+            ("Amber",         "#FFFFB300"),
+            ("Orange",        "#FFFF8A3D"),
+            ("Purple",        "#FFAB47BC"),
+            ("Magenta",       "#FFEC407A"),
+            ("Gray",          "#FF9E9E9E")
+        };
+
+        /// <summary>
+        /// The waveform colour to draw with: the user's pick if one is set and parses,
+        /// otherwise the theme's own. A corrupt or hand-edited value falls back rather
+        /// than throwing, since this runs during control construction.
+        /// </summary>
+        internal static Color ResolveWaveColor(string hex, bool isDark)
+        {
+            if (!string.IsNullOrWhiteSpace(hex))
+            {
+                try { return Hex(hex); }
+                catch { /* fall through to the theme default */ }
+            }
+            return WaveformWave(isDark);
         }
 
         /// <summary>Populate the brush resource keys referenced by the XAML via DynamicResource.</summary>
