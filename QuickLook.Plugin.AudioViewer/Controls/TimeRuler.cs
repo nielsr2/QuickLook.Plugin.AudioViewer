@@ -6,14 +6,30 @@ using System.Windows.Media;
 namespace QuickLook.Plugin.AudioViewer.Controls
 {
     /// <summary>
-    /// Time axis drawn below the spectrogram. Its width matches the full timeline width
-    /// (so ticks align with the spectrogram columns) and it is translated horizontally to
-    /// follow the shared scroll offset.
+    /// Time axis drawn below the spectrogram. The element is exactly as wide as the visible
+    /// pane and draws only the currently visible slice of the timeline, offsetting each tick
+    /// by the shared scroll position.
     /// </summary>
+    /// <remarks>
+    /// It used to be as wide as the whole timeline (up to 12000px) and be slid under a
+    /// clipping parent with a RenderTransform. That silently truncated the axis: when an
+    /// element's unclipped desired size overflows its arrange slot, WPF sets NeedsClipBounds
+    /// and installs a VisualClip the size of that slot — expressed in the element's LOCAL
+    /// coordinates. A RenderTransform maps local to parent, so the clip travelled with the
+    /// translation instead of staying put. Anything past local x ≈ viewport width could
+    /// never be shown, and scrolling ate the ruler from the left rather than revealing more.
+    /// The tell was that labels always stopped at the same pixel offset regardless of file
+    /// length or tick step.
+    ///
+    /// Drawing only the visible range avoids that entirely, and costs one repaint of ~10-20
+    /// labels per scroll event instead of retaining a 12000px-wide visual.
+    /// </remarks>
     public sealed class TimeRuler : FrameworkElement
     {
         private double _duration;
         private double _minPxPerLabel = 64;
+        private double _timelineWidth;   // full scrollable content width
+        private double _scrollOffset;
         private Brush _text = Brushes.Gray;
         private Brush _line = Brushes.Gray;
         private readonly Typeface _face = new Typeface("Segoe UI");
@@ -37,13 +53,19 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         }
 
         /// <summary>
-        /// WPF re-arranges on a size change but does not re-invoke <see cref="OnRender"/>;
-        /// the visual keeps whatever drawing it already has. This ruler's Width is bound to
-        /// the timeline's ActualWidth, which is only known after layout runs — while
-        /// Configure's InvalidateVisual fires before it. Without re-invalidating here the
-        /// axis keeps the ticks it computed at the initial, viewport-sized width, so on a
-        /// long file the labels cover only the first screenful and then stop.
+        /// The timeline's full laid-out width and the current horizontal scroll offset.
+        /// Both come from the shared ScrollViewer, so the ruler cannot disagree with the
+        /// content it labels — the previous Width binding could be read before layout had
+        /// settled.
         /// </summary>
+        public void SetGeometry(double timelineWidth, double scrollOffset)
+        {
+            _timelineWidth = timelineWidth;
+            _scrollOffset = scrollOffset;
+            InvalidateVisual();
+        }
+
+        // The visible time range is derived from ActualWidth, so a resize must redraw.
         protected override void OnRenderSizeChanged(SizeChangedInfo info)
         {
             base.OnRenderSizeChanged(info);
@@ -52,39 +74,40 @@ namespace QuickLook.Plugin.AudioViewer.Controls
 
         protected override void OnRender(DrawingContext dc)
         {
-            double w = ActualWidth, h = ActualHeight;
-            if (w <= 0 || _duration <= 0) return;
+            double w = ActualWidth;
+            if (w <= 0 || _duration <= 0 || _timelineWidth <= 0) return;
 
-            double step = AxisTicks.TimeStepSeconds(_duration, w, _minPxPerLabel);
+            double pxPerSec = _timelineWidth / _duration;
+            if (pxPerSec <= 0) return;
+
+            // The step comes from the FULL timeline width, not the viewport, so it stays put
+            // while scrolling instead of re-quantising under the user.
+            double step = AxisTicks.TimeStepSeconds(_duration, _timelineWidth, _minPxPerLabel);
             int decimals = AxisTicks.DecimalsForStep(step);
             var pen = new Pen(_line, 1); pen.Freeze();
             double dpi = PixelsPerDip();
 
-            // Ticks are always drawn; labels are skipped when the previous one would still
-            // be under them. FrequencyRuler does the same on its own axis.
-            //
-            // De-cluttering compares the UNCLAMPED positions. Comparing the clamped ones is
-            // what broke the axis: every label past (w - textWidth) was pulled back to the
-            // same x, so the first of them set lastLabelEnd near the ruler's right edge and
-            // every later label then tested as "overlapping" and was dropped. On a long file
-            // the axis simply stopped part way through.
-            double lastLabelEnd = double.NegativeInfinity;
-            var ticks = AxisTicks.TimeTicks(_duration, step);
+            // Widest label the file can produce, used to decide how many ticks to skip
+            // between labels. See AxisTicks.VisibleTicks for why the stride is fixed.
+            double widest = Text(AxisTicks.FormatTime(_duration, decimals), dpi).Width;
+            AxisTicks.VisibleTicks(_duration, _timelineWidth, w, _scrollOffset, step, widest,
+                out long first, out long lastIndex, out int stride);
 
-            for (int i = 0; i < ticks.Length; i++)
+            for (long i = first; i <= lastIndex; i++)
             {
-                double t = ticks[i];
-                double x = t / _duration * w;
-                dc.DrawLine(pen, new Point(x, 0), new Point(x, 4));
+                double t = i * step;
+                double x = t * pxPerSec - _scrollOffset;
 
-                if (x < lastLabelEnd + 4) continue;
+                dc.DrawLine(pen, new Point(x, 0), new Point(x, 4));
+                if (i % stride != 0) continue;
 
                 var ft = Text(AxisTicks.FormatTime(t, decimals), dpi);
-                lastLabelEnd = x + ft.Width;
+                double tx = x + 2;
 
-                // Only the final label is nudged left to stay on the ruler; pulling interior
-                // labels back would misplace them relative to their own tick.
-                double tx = i == ticks.Length - 1 ? Math.Min(w - ft.Width, x + 2) : x + 2;
+                // Keep the file's final label on screen when its tick lands on the very edge;
+                // every other label stays with its own tick and clips like the content does.
+                if (i == lastIndex && tx + ft.Width > w) tx = w - ft.Width;
+
                 dc.DrawText(ft, new Point(Math.Max(0, tx), 4));
             }
         }

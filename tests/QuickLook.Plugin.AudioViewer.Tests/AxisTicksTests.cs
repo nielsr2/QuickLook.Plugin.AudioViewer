@@ -140,6 +140,82 @@ namespace QuickLook.Plugin.AudioViewer.Tests
             Assert.True(lastDrawnX > width * 0.95, $"labels stopped at x={lastDrawnX} of {width}");
         }
 
+        /// <summary>
+        /// The axis truncation, reproduced against the real files it was reported on.
+        /// Whatever the scroll position, the ruler must offer ticks covering the visible
+        /// window — the symptom was labels always ending at the same pixel offset, roughly
+        /// one viewport in, no matter how far the user scrolled.
+        /// </summary>
+        [Theory]
+        // 1:22 file: 82.368 * 80 = 6589px timeline.
+        [InlineData(82.368, 6589, 0)]
+        [InlineData(82.368, 6589, 480)]
+        [InlineData(82.368, 6589, 3000)]
+        [InlineData(82.368, 6589, 5649)]    // scrolled to the very end
+        // 4:12 file: 252.906 * 80 = 20232, capped at 12000.
+        [InlineData(252.906, 12000, 0)]
+        [InlineData(252.906, 12000, 474)]
+        [InlineData(252.906, 12000, 6000)]
+        [InlineData(252.906, 12000, 11060)]
+        public void VisibleTicks_CoverTheWindowAtEveryScrollPosition(
+            double duration, double timelineWidth, double scrollOffset)
+        {
+            const double viewport = 940, widestLabel = 30;
+
+            double step = AxisTicks.TimeStepSeconds(duration, timelineWidth, 64);
+            AxisTicks.VisibleTicks(duration, timelineWidth, viewport, scrollOffset, step,
+                widestLabel, out long first, out long last, out int stride);
+
+            Assert.True(last >= first, $"empty tick range at offset {scrollOffset}");
+
+            double pxPerSec = timelineWidth / duration;
+            double firstX = first * step * pxPerSec - scrollOffset;
+            double lastX = last * step * pxPerSec - scrollOffset;
+
+            // The range must start at or before the left edge and reach the right edge —
+            // unless the file simply ends inside the window.
+            Assert.True(firstX <= 0.001, $"first tick at x={firstX}, leaving a gap on the left");
+
+            double endOfFileX = duration * pxPerSec - scrollOffset;
+            if (endOfFileX > viewport)
+                Assert.True(lastX >= viewport, $"last tick at x={lastX}, short of the {viewport}px edge");
+
+            Assert.True(stride >= 1);
+        }
+
+        [Fact]
+        public void VisibleTicks_LabelStrideIsIndependentOfScrollPosition()
+        {
+            const double duration = 252.906, timelineWidth = 12000, viewport = 940, widest = 30;
+            double step = AxisTicks.TimeStepSeconds(duration, timelineWidth, 64);
+
+            AxisTicks.VisibleTicks(duration, timelineWidth, viewport, 0, step, widest,
+                out _, out _, out int strideAtStart);
+            AxisTicks.VisibleTicks(duration, timelineWidth, viewport, 7000, step, widest,
+                out _, out _, out int strideMidway);
+
+            // A stride that moved with the scroll would make labels pop in and out.
+            Assert.Equal(strideAtStart, strideMidway);
+        }
+
+        [Fact]
+        public void VisibleTicks_SkipsLabelsWhenTicksAreTighterThanTheText()
+        {
+            // 0.1s steps at 80px/s = 8px apart; a 30px label needs every 5th.
+            AxisTicks.VisibleTicks(60, 4800, 940, 0, 0.1, 30, out _, out _, out int stride);
+            Assert.True(stride >= 5, $"expected to skip labels, got stride {stride}");
+        }
+
+        [Fact]
+        public void VisibleTicks_DegenerateInputsProduceAnEmptyRange()
+        {
+            AxisTicks.VisibleTicks(0, 6589, 940, 0, 1, 30, out long f1, out long l1, out _);
+            Assert.True(l1 < f1);
+
+            AxisTicks.VisibleTicks(82.368, 0, 940, 0, 1, 30, out long f2, out long l2, out _);
+            Assert.True(l2 < f2);
+        }
+
         [Fact]
         public void DensityChangesTheStep()
         {

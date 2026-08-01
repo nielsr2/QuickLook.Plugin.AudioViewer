@@ -43,8 +43,9 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             InvalidateVisual();
         }
 
-        // OnRender is not re-invoked for a size change alone, and the gradient band and its
-        // labels are sized from ActualHeight. See the note on TimeRuler.OnRenderSizeChanged.
+        // The gradient band and its labels are sized from ActualHeight, so state that
+        // dependency explicitly. (WPF's Arrange already invalidates on a RenderSize change,
+        // so this is belt and braces rather than load-bearing.)
         protected override void OnRenderSizeChanged(SizeChangedInfo info)
         {
             base.OnRenderSizeChanged(info);

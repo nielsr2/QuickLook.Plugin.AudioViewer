@@ -593,14 +593,12 @@
       <ctl:SpectrogramColorbar x:Name="Colorbar" Grid.Column="2" Grid.Row="0" Width="52"
                                Margin="6,0,0,0" Visibility="Collapsed"/>
 
-      <!-- Time axis below the content column; translated to follow the shared scroll. -->
+      <!-- Time axis below the content column. It fills this cell and draws only the
+           visible slice of the timeline, taking the scroll offset from ViewScroll. It was
+           previously as wide as the whole timeline and slid under this Grid's clip with a
+           RenderTransform, which WPF's layout clip silently truncated — see TimeRuler. -->
       <Grid Grid.Column="1" Grid.Row="1" ClipToBounds="True" Height="18">
-        <ctl:TimeRuler x:Name="TimeAxis" HorizontalAlignment="Left" Visibility="Collapsed"
-                       Width="{Binding ActualWidth, ElementName=Timeline}">
-          <ctl:TimeRuler.RenderTransform>
-            <TranslateTransform x:Name="TimeRulerTranslate"/>
-          </ctl:TimeRuler.RenderTransform>
-        </ctl:TimeRuler>
+        <ctl:TimeRuler x:Name="TimeAxis" Visibility="Collapsed"/>
       </Grid>
     </Grid>
 

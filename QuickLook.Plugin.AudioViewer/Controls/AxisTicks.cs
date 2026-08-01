@@ -51,6 +51,46 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         }
 
         /// <summary>
+        /// Which ticks the time ruler should draw for the currently visible window, and how
+        /// many to skip between labels.
+        /// </summary>
+        /// <remarks>
+        /// Pulled out of the ruler's OnRender so it can be tested: this calculation has been
+        /// the source of repeated axis-truncation bugs and is otherwise only reachable
+        /// through WPF layout.
+        ///
+        /// <paramref name="labelStride"/> is fixed for the whole file rather than decided
+        /// per-tick from the left edge, so the same instants stay labelled as the view
+        /// scrolls instead of labels popping in and out.
+        /// </remarks>
+        internal static void VisibleTicks(
+            double durationSeconds, double timelineWidth, double viewportWidth,
+            double scrollOffsetPx, double stepSeconds, double widestLabelPx,
+            out long firstIndex, out long lastIndex, out int labelStride)
+        {
+            firstIndex = 0;
+            lastIndex = -1;
+            labelStride = 1;
+            if (durationSeconds <= 0 || timelineWidth <= 0 || stepSeconds <= 0) return;
+
+            double pxPerSec = timelineWidth / durationSeconds;
+            double stepPx = stepSeconds * pxPerSec;
+            if (stepPx <= 0) return;
+
+            while (stepPx * labelStride < widestLabelPx + 6 && labelStride < 1000) labelStride++;
+
+            // One step early so a tick just off the left edge still places its label.
+            firstIndex = (long)Math.Floor(scrollOffsetPx / stepPx) - 1;
+            if (firstIndex < 0) firstIndex = 0;
+
+            long finalIndex = (long)Math.Floor(durationSeconds / stepSeconds + 1e-9);
+            // One label-width past the right edge, so a label anchored just off-screen can
+            // still bleed into view rather than vanishing early.
+            long visibleLast = (long)Math.Ceiling((scrollOffsetPx + viewportWidth + widestLabelPx) / stepPx);
+            lastIndex = Math.Min(finalIndex, visibleLast);
+        }
+
+        /// <summary>
         /// How many fractional-second digits a tick label needs so that adjacent ticks
         /// spaced <paramref name="stepSeconds"/> apart do not render identically.
         /// </summary>

@@ -1385,6 +1385,9 @@ namespace QuickLook.Plugin.AudioViewer
             // TimeAxis.Width is bound to Timeline.ActualWidth in XAML, so it matches the
             // stretched width for short files too; here we only supply the duration.
             TimeAxis.Configure(seconds, PluginSettings.TimeAxisMinPxPerLabel);
+            // Seed the geometry from the width we just set, so the axis is correct on the
+            // very first paint; ViewScroll_ScrollChanged refines it once layout settles.
+            TimeAxis.SetGeometry(w, 0);
             TimeAxis.Visibility = Visibility.Visible;
         }
 
@@ -1392,7 +1395,11 @@ namespace QuickLook.Plugin.AudioViewer
         // and mirror the scroll state onto the dedicated horizontal scrollbar below the plot.
         private void ViewScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
         {
-            TimeRulerTranslate.X = -ViewScroll.HorizontalOffset;
+            // ExtentWidth is the timeline's real laid-out width, so short files that stretch
+            // to the viewport via MinWidth are handled without a second code path. This also
+            // fires on extent changes, so the ruler picks up the width as soon as layout
+            // settles rather than depending on a binding having resolved first.
+            TimeAxis.SetGeometry(ViewScroll.ExtentWidth, ViewScroll.HorizontalOffset);
 
             double scrollable = ViewScroll.ScrollableWidth;
             HScroll.Maximum = scrollable;
