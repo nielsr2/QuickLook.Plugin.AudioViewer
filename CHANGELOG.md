@@ -4,6 +4,48 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Vertical waveform zoom. Quiet files are auto-fitted on load (99th-percentile, so a
+  single transient does not defeat it), and Alt + wheel over the waveform magnifies
+  manually; `0` resets. A badge shows the factor whenever the waveform is magnified, so a
+  stretched waveform is never mistaken for the file's real level. Columns the lane edge
+  cut off are marked in amber.
+- A dBFS amplitude ruler beside the waveform, so the Y axis reflects the magnification.
+- Hover readout as a labelled box (Time / Note / Level) by default, with the previous
+  single line kept as a Compact option and each field individually switchable.
+- Milliseconds in the transport readout (`mm:ss.mmm`), on by default.
+- `dB²` amplitude scale: half the log gain against the same contrast floor, lifting
+  background detail and upper partials that the plain dB scale crushes toward black.
+- Appearance setting — Follow QuickLook / Light / Dark — overriding the host's theme.
+- Customizable waveform colour, with nine presets plus the theme default.
+
+### Changed
+- Reverse colormap is now Never / Always / Auto (light mode only), replacing the on-off
+  checkbox. The previously ticked state migrates to Always.
+- The spectrogram scan no longer shifts the whole FFT window once per input sample. On a
+  3-minute file this is 2.8x faster at the default FFT 1024 and 5.4x at 4096, with
+  bit-identical output.
+- Playhead auto-follow now works in the waveform-only view (which multichannel files open
+  to) and no longer undoes a deliberate scroll on the next frame.
+- Shift + wheel forces the time axis, so the timeline stays reachable over a lane stack.
+
+### Fixed
+- The colorbar legend no longer renders every tick as `0.00` in linear mode. The values
+  are raw FFT magnitudes spanning several orders of magnitude, and a fixed two-decimal
+  format collapsed them.
+- Duplicate time-axis labels on short files (`0:00, 0:00, 0:01, 0:01, …`): the tick ladder
+  bottomed out at 0.5 s while labels only ever showed whole seconds. The time ruler also
+  now de-clutters overlapping labels, as the frequency ruler already did.
+- The viewer follows a theme change made after the preview opens. `ApplyTheme` ran once
+  from the constructor and nothing listened for a later change, so the palette could stick
+  — usually on dark, since the OS-theme lookup falls back to dark on failure.
+- Dragging on the waveform to scrub no longer re-centres the timeline under the pointer on
+  every step.
+- A truncated spectrogram now says so instead of silently mis-reporting every time past
+  the truncation point.
+
 ## [1.5.0] — 2026-08-01
 
 ### Added
