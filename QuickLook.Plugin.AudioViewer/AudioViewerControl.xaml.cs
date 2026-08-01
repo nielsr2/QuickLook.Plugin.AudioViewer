@@ -185,6 +185,10 @@ namespace QuickLook.Plugin.AudioViewer
             FileInfoCheck.IsChecked = PluginSettings.ShowFileInfo;
             FileInfoStyleCombo.SelectedIndex = (int)PluginSettings.FileInfoDisplay;
             HoverModeCombo.SelectedIndex = (int)PluginSettings.HoverReadoutMode;
+            HoverStyleCombo.SelectedIndex = (int)PluginSettings.HoverStyle;
+            HoverTimeCheck.IsChecked = PluginSettings.HoverShowTime;
+            HoverPitchCheck.IsChecked = PluginSettings.HoverShowPitch;
+            HoverLevelCheck.IsChecked = PluginSettings.HoverShowLevel;
             MillisecondsCheck.IsChecked = PluginSettings.ShowMilliseconds;
             NoteLayerCheck.IsChecked = PluginSettings.NoteLayerEnabled;
             LayoutCombo.SelectedIndex = (int)PluginSettings.Layout;
@@ -679,6 +683,21 @@ namespace QuickLook.Plugin.AudioViewer
             if (_initializingSettings || HoverModeCombo.SelectedIndex < 0) return;
             // No re-render needed: this only affects the next hover readout.
             PluginSettings.HoverReadoutMode = (HoverReadoutMode)HoverModeCombo.SelectedIndex;
+        }
+
+        private void HoverStyleCombo_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_initializingSettings || HoverStyleCombo.SelectedIndex < 0) return;
+            // Read live on the next MouseMove, so nothing to re-render.
+            PluginSettings.HoverStyle = (HoverReadoutStyle)HoverStyleCombo.SelectedIndex;
+        }
+
+        private void HoverFieldCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.HoverShowTime = HoverTimeCheck.IsChecked == true;
+            PluginSettings.HoverShowPitch = HoverPitchCheck.IsChecked == true;
+            PluginSettings.HoverShowLevel = HoverLevelCheck.IsChecked == true;
         }
 
         private void MillisecondsCheck_Changed(object sender, RoutedEventArgs e)
@@ -1341,15 +1360,28 @@ namespace QuickLook.Plugin.AudioViewer
             int bin = (int)(freq / hzPerBin);
             if (bin < 0) bin = 0; else if (bin > frame.Length - 1) bin = frame.Length - 1;
             double mag = frame[bin];
-            string level = HoverReadoutFormatter.FormatLevel(mag, PluginSettings.AmpScale);
+            string readout = HoverReadoutFormatter.FormatReadout(
+                time, PluginSettings.ShowMilliseconds ? 3 : 0,
+                freq, PluginSettings.HoverReadoutMode,
+                mag, PluginSettings.AmpScale,
+                PluginSettings.HoverStyle,
+                PluginSettings.HoverShowTime, PluginSettings.HoverShowPitch, PluginSettings.HoverShowLevel);
 
-            string pitch = HoverReadoutFormatter.FormatPitch(freq, PluginSettings.HoverReadoutMode);
-            int timeDecimals = PluginSettings.ShowMilliseconds ? 3 : 0;
-            HoverText.Text = $"{AxisTicks.FormatTime(time, timeDecimals)}  ·  {pitch}  ·  {level}";
+            if (readout.Length == 0)
+            {
+                // Every field switched off — there is nothing to show.
+                HoverReadout.Visibility = Visibility.Collapsed;
+                return;
+            }
+            HoverText.Text = readout;
 
             var pc = e.GetPosition(ContentGrid);
-            HoverTranslate.X = Math.Min(pc.X + 12, ContentGrid.ActualWidth - HoverReadout.ActualWidth - 4);
-            HoverTranslate.Y = Math.Min(pc.Y + 12, ContentGrid.ActualHeight - HoverReadout.ActualHeight - 4);
+            HoverReadoutFormatter.PlaceBox(pc.X, pc.Y,
+                HoverReadout.ActualWidth, HoverReadout.ActualHeight,
+                ContentGrid.ActualWidth, ContentGrid.ActualHeight, 12,
+                out double hx, out double hy);
+            HoverTranslate.X = hx;
+            HoverTranslate.Y = hy;
             HoverReadout.Visibility = Visibility.Visible;
         }
 

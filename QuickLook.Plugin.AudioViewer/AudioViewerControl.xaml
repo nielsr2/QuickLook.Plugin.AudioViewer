@@ -255,12 +255,27 @@
             <Border Style="{StaticResource SettingsSeparator}"/>
             <TextBlock Text="OVERLAYS" Style="{StaticResource SettingsSectionHeader}"/>
 
+            <!-- Order is load-bearing: the handler casts SelectedIndex to HoverReadoutStyle. -->
+            <TextBlock Text="Hover readout style" Style="{StaticResource SettingsFieldLabel}"/>
+            <ComboBox x:Name="HoverStyleCombo" Margin="0,0,0,8" SelectionChanged="HoverStyleCombo_Changed">
+              <ComboBoxItem Content="Labelled box"/>
+              <ComboBoxItem Content="Compact (one line)"/>
+            </ComboBox>
+
             <TextBlock Text="Hover readout" Style="{StaticResource SettingsFieldLabel}"/>
             <ComboBox x:Name="HoverModeCombo" Margin="0,0,0,8" SelectionChanged="HoverModeCombo_Changed">
               <ComboBoxItem Content="MIDI note"/>
               <ComboBoxItem Content="Frequency"/>
               <ComboBoxItem Content="Note + frequency"/>
             </ComboBox>
+
+            <TextBlock Text="Show in readout" Style="{StaticResource SettingsFieldLabel}"/>
+            <CheckBox x:Name="HoverTimeCheck" Content="Time" Foreground="{DynamicResource PrimaryText}"
+                      Checked="HoverFieldCheck_Changed" Unchecked="HoverFieldCheck_Changed"/>
+            <CheckBox x:Name="HoverPitchCheck" Content="Note / frequency" Foreground="{DynamicResource PrimaryText}"
+                      Checked="HoverFieldCheck_Changed" Unchecked="HoverFieldCheck_Changed"/>
+            <CheckBox x:Name="HoverLevelCheck" Content="Level" Foreground="{DynamicResource PrimaryText}"
+                      Margin="0,0,0,8" Checked="HoverFieldCheck_Changed" Unchecked="HoverFieldCheck_Changed"/>
 
             <CheckBox x:Name="FileInfoCheck" Content="Show file info" Foreground="{DynamicResource PrimaryText}"
                       Margin="0,0,0,8" Checked="FileInfoCheck_Changed" Unchecked="FileInfoCheck_Changed"/>

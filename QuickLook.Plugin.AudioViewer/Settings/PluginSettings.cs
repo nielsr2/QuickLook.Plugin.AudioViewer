@@ -151,6 +151,34 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("ReverseMode", value.ToString(), Domain);
         }
 
+        /// <summary>Hover readout layout: labelled rows (default) or a single compact line.</summary>
+        public static HoverReadoutStyle HoverStyle
+        {
+            get => ParseEnum("HoverStyle", HoverReadoutStyle.Box);
+            set => SettingHelper.Set("HoverStyle", value.ToString(), Domain);
+        }
+
+        /// <summary>Include the time row in the hover readout.</summary>
+        public static bool HoverShowTime
+        {
+            get => SettingHelper.Get("HoverShowTime", true, Domain);
+            set => SettingHelper.Set("HoverShowTime", value, Domain);
+        }
+
+        /// <summary>Include the note/frequency row in the hover readout.</summary>
+        public static bool HoverShowPitch
+        {
+            get => SettingHelper.Get("HoverShowPitch", true, Domain);
+            set => SettingHelper.Set("HoverShowPitch", value, Domain);
+        }
+
+        /// <summary>Include the level row in the hover readout.</summary>
+        public static bool HoverShowLevel
+        {
+            get => SettingHelper.Get("HoverShowLevel", true, Domain);
+            set => SettingHelper.Set("HoverShowLevel", value, Domain);
+        }
+
         /// <summary>Light/dark palette selection; defaults to following QuickLook.</summary>
         public static ThemeMode ThemeMode
         {

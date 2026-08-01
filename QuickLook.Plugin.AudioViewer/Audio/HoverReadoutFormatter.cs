@@ -62,5 +62,87 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                     return $"{System.Math.Round(20.0 * System.Math.Log10(magnitude + 1e-12))} dB";
             }
         }
+
+        /// <summary>Row label for the pitch term, which changes with the readout mode.</summary>
+        private static string PitchLabel(HoverReadoutMode mode)
+        {
+            switch (mode)
+            {
+                case HoverReadoutMode.MidiNote: return "Note";
+                case HoverReadoutMode.Frequency: return "Freq";
+                default: return "Pitch";
+            }
+        }
+
+        /// <summary>
+        /// The whole hover readout. In <see cref="HoverReadoutStyle.Box"/> each value gets a
+        /// label on its own line; in Compact they run together on one line as bare values.
+        /// Returns an empty string when every field is switched off, which the caller treats
+        /// as "hide the readout".
+        /// </summary>
+        /// <remarks>
+        /// "Level" is a relative figure, not dBFS — see <see cref="FormatLevel"/>.
+        /// </remarks>
+        internal static string FormatReadout(
+            double timeSeconds, int timeDecimals,
+            double freq, HoverReadoutMode pitchMode,
+            double magnitude, AmplitudeScale ampScale,
+            HoverReadoutStyle style,
+            bool showTime, bool showPitch, bool showLevel)
+        {
+            var labels = new System.Collections.Generic.List<string>(3);
+            var values = new System.Collections.Generic.List<string>(3);
+
+            if (showTime)
+            {
+                labels.Add("Time");
+                values.Add(AxisTicks.FormatTime(timeSeconds, timeDecimals));
+            }
+            if (showPitch)
+            {
+                labels.Add(PitchLabel(pitchMode));
+                values.Add(FormatPitch(freq, pitchMode));
+            }
+            if (showLevel)
+            {
+                labels.Add("Level");
+                values.Add(FormatLevel(magnitude, ampScale));
+            }
+
+            if (values.Count == 0) return string.Empty;
+            if (style == HoverReadoutStyle.Compact) return string.Join(Separator, values);
+
+            // Labels are padded to a fixed width so the values line up in the monospace
+            // font, matching how the file-info overlay lays out its rows.
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < labels.Count; i++)
+            {
+                if (i > 0) sb.Append('\n');
+                sb.Append(labels[i].PadRight(6)).Append(values[i]);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Place the readout next to the cursor, flipping to the other side when it would
+        /// overflow the pane rather than sliding along the edge (which parks it on top of
+        /// whatever is being inspected). Falls back to clamping if it fits on neither side.
+        /// </summary>
+        internal static void PlaceBox(
+            double cursorX, double cursorY, double boxW, double boxH,
+            double paneW, double paneH, double gap,
+            out double x, out double y)
+        {
+            x = cursorX + gap;
+            if (x + boxW > paneW && cursorX - gap - boxW >= 0) x = cursorX - gap - boxW;
+
+            y = cursorY + gap;
+            if (y + boxH > paneH && cursorY - gap - boxH >= 0) y = cursorY - gap - boxH;
+
+            if (x + boxW > paneW) x = paneW - boxW;
+            if (y + boxH > paneH) y = paneH - boxH;
+            if (x < 0) x = 0;
+            if (y < 0) y = 0;
+        }
     }
 }

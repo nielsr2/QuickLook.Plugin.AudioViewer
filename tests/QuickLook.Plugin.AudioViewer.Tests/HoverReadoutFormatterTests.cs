@@ -90,6 +90,102 @@ namespace QuickLook.Plugin.AudioViewer.Tests
         }
 
         [Fact]
+        public void FormatReadout_BoxStyle_LabelsEachRowOnItsOwnLine()
+        {
+            string s = HoverReadoutFormatter.FormatReadout(
+                1.5, 3, 440.0, HoverReadoutMode.MidiNote, 0.5, AmplitudeScale.Decibel,
+                HoverReadoutStyle.Box, true, true, true);
+
+            var lines = s.Split('\n');
+            Assert.Equal(3, lines.Length);
+            Assert.StartsWith("Time", lines[0]);
+            Assert.StartsWith("Note", lines[1]);
+            Assert.StartsWith("Level", lines[2]);
+            Assert.Contains("0:01.500", lines[0]);
+            Assert.Contains("A4", lines[1]);
+        }
+
+        [Fact]
+        public void FormatReadout_PitchLabelTracksTheReadoutMode()
+        {
+            string note = HoverReadoutFormatter.FormatReadout(0, 0, 440, HoverReadoutMode.MidiNote,
+                0.5, AmplitudeScale.Decibel, HoverReadoutStyle.Box, false, true, false);
+            string freq = HoverReadoutFormatter.FormatReadout(0, 0, 440, HoverReadoutMode.Frequency,
+                0.5, AmplitudeScale.Decibel, HoverReadoutStyle.Box, false, true, false);
+            string both = HoverReadoutFormatter.FormatReadout(0, 0, 440, HoverReadoutMode.Both,
+                0.5, AmplitudeScale.Decibel, HoverReadoutStyle.Box, false, true, false);
+
+            Assert.StartsWith("Note", note);
+            Assert.StartsWith("Freq", freq);
+            Assert.StartsWith("Pitch", both);
+        }
+
+        [Fact]
+        public void FormatReadout_CompactStyle_IsOneLineOfBareValues()
+        {
+            string s = HoverReadoutFormatter.FormatReadout(
+                1.5, 3, 440.0, HoverReadoutMode.MidiNote, 0.5, AmplitudeScale.Decibel,
+                HoverReadoutStyle.Compact, true, true, true);
+
+            Assert.DoesNotContain("\n", s);
+            Assert.DoesNotContain("Time", s);
+            Assert.Contains("·", s);
+        }
+
+        [Fact]
+        public void FormatReadout_OmitsDeselectedFields()
+        {
+            string noTime = HoverReadoutFormatter.FormatReadout(
+                1.5, 3, 440.0, HoverReadoutMode.MidiNote, 0.5, AmplitudeScale.Decibel,
+                HoverReadoutStyle.Box, showTime: false, showPitch: true, showLevel: true);
+
+            Assert.DoesNotContain("Time", noTime);
+            Assert.Equal(2, noTime.Split('\n').Length);
+        }
+
+        [Fact]
+        public void FormatReadout_AllFieldsOff_IsEmptySoTheCallerCanHideIt()
+        {
+            Assert.Equal(string.Empty, HoverReadoutFormatter.FormatReadout(
+                1.5, 3, 440.0, HoverReadoutMode.MidiNote, 0.5, AmplitudeScale.Decibel,
+                HoverReadoutStyle.Box, false, false, false));
+        }
+
+        [Fact]
+        public void PlaceBox_SitsBelowRightOfTheCursorWhenThereIsRoom()
+        {
+            HoverReadoutFormatter.PlaceBox(100, 100, 80, 40, 800, 600, 12, out double x, out double y);
+            Assert.Equal(112, x);
+            Assert.Equal(112, y);
+        }
+
+        [Fact]
+        public void PlaceBox_FlipsRatherThanSlidingAlongTheEdge()
+        {
+            // Near the right/bottom edge the box must jump to the other side of the cursor.
+            // Clamping instead would park it on top of the very pixel being inspected.
+            HoverReadoutFormatter.PlaceBox(780, 580, 80, 40, 800, 600, 12, out double x, out double y);
+            Assert.Equal(688, x);   // 780 - 12 - 80
+            Assert.Equal(528, y);   // 580 - 12 - 40
+        }
+
+        [Fact]
+        public void PlaceBox_ClampsWhenItFitsOnNeitherSide()
+        {
+            // Box wider than the pane: it cannot flip anywhere, so it must still stay inside.
+            HoverReadoutFormatter.PlaceBox(50, 50, 500, 40, 400, 600, 12, out double x, out double y);
+            Assert.Equal(0, x);
+            Assert.InRange(y, 0, 560);
+        }
+
+        [Fact]
+        public void HoverReadoutStyle_EnumOrder_IsLoadBearingForTheSettingsCombo()
+        {
+            Assert.Equal(0, (int)HoverReadoutStyle.Box);
+            Assert.Equal(1, (int)HoverReadoutStyle.Compact);
+        }
+
+        [Fact]
         public void AmplitudeScale_EnumOrder_IsLoadBearingForTheSettingsCombo()
         {
             // AmpCombo_Changed casts SelectedIndex straight to this enum, so the XAML
