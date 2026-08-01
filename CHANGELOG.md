@@ -4,13 +4,23 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.0] — Unreleased
+## [1.5.0] — 2026-08-01
 
 ### Added
-- Interactive MIDI-note overlay on the spectrogram (opt-in "Note layer" setting): draw notes
-  with a pencil tool, move/resize/select/delete them, and export to a Standard MIDI File or
-  copy them as text. Notes align on any frequency scale via the shared scale mapping, with a
-  one-click nudge to switch to the Log scale for evenly-spaced semitone rows.
+- Multichannel support. Files with more than two channels render one stacked waveform lane
+  per channel, vertically scrollable, with adaptive lane height and separators; they open to
+  the waveform-only view. A channel selector in the toolbar drives both playback and the
+  spectrogram source, and `ChannelMixSampleProvider` downmixes N channels to stereo (or solos
+  one) for playback. Verified against 16-channel WAV files.
+- Stereo display modes for the waveform, under a new WAVEFORM settings section: *Two lanes
+  (split)*, *Combined — mono average*, or *Combined — peak union*. Mono and multichannel
+  files always show one lane per channel.
+- Horizontal trackpad scrolling on the shared timeline.
+- Interactive MIDI-note overlay on the spectrogram, opt-in via the new EXPERIMENTAL settings
+  section ("Note overlay"): draw notes with a pencil tool, move/resize/select/delete them,
+  and export to a Standard MIDI File or copy them as text. Notes align on any frequency scale
+  via the shared scale mapping, with a one-click nudge to switch to the Log scale for
+  evenly-spaced semitone rows.
 - Embedded tags (title, artist, album, year, genre) and cover art in the file-info
   overlay, via TagLibSharp.
 - Spectrogram axes: a frequency ruler (Linear/Log/Mel aware) and a time ruler that
@@ -37,6 +47,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - High-quality bitmap scaling for a crisper spectrogram on high-DPI displays.
 - The DLL now carries the plugin version (previously `1.0.0.0`), single-sourced with
   the metadata config.
+- Phased loading: file info, the transport, and audio come up immediately while the waveform
+  scan runs in the background and fills in progressively, so long files are playable long
+  before the waveform finishes.
+- The waveform renders as an off-thread bitmap blit instead of ~192k per-sample `DrawLine`
+  calls, with a fast PCM16 decode path and cached lane rendering. Large multichannel files
+  are dramatically faster to open.
 
 ### Fixed
 - Closing a preview mid-load no longer leaks the audio player, file handle, or timer
@@ -46,6 +62,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Files shorter than one FFT window now show a message instead of a blank spectrogram.
 - Corrected the license attribution for QuickLook.Common (MIT, not GPL-3.0) and the
   file-info overlay position in the README.
+- A playback-init failure no longer blanks the whole preview.
+- The playback stream the player already owns is no longer disposed twice.
+- `WasapiOut` is disposed if `Init` throws in the `AudioPlayer` constructor.
+- The channel selection is captured before the async spectrogram compute, so switching
+  channels mid-render no longer renders the wrong source.
+- A late waveform snapshot can no longer overwrite the final rendered waveform.
+- A note drawn near the bottom edge of the spectrogram no longer breaks "Copy notes as text"
+  (on the Linear and Mel scales the bottom row is 0 Hz, which has no pitch).
+- The hover readout and the note overlay keep working when the audio player fails to
+  initialise, instead of going dead along with playback.
+- Switching between light and dark themes now repaints the playhead and the lane separators,
+  and no longer leaves a stale waveform bitmap in the wrong colours.
 
 ## [1.3.2] — 2026-07-18
 

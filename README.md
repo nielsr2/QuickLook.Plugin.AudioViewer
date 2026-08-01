@@ -11,6 +11,18 @@ auto-play), and a configurable spectrogram.
 
 ![QuickLook.Plugin.AudioViewer previewing a WAV file — waveform above a magma spectrogram, with the draggable file-info overlay](assets/screenshot.png)
 
+## Waveform and channels
+
+Stereo files draw as **Two lanes (split)** by default; the settings flyout's *Stereo display*
+option can combine them into one lane as a **mono average** or a **peak union** (the envelope
+of both channels, so nothing transient is lost).
+
+Mono and multichannel files always show one lane per channel. Files with more than two
+channels — up to 16-channel WAVs — stack one lane per channel in a vertically scrollable
+column with adaptive lane heights, and open to the waveform-only view. A channel selector
+appears in the toolbar for these files and drives both playback and the spectrogram source;
+playback downmixes to stereo, or solos the selected channel.
+
 ## Spectrogram
 
 A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
@@ -38,7 +50,16 @@ recomputes the transform.
 
 Long files render in full: the waveform and spectrogram share one horizontally
 scrollable timeline (they stay aligned in time), and the view auto-follows the
-playhead during playback. Short files fill the pane with no scrollbar.
+playhead during playback. Short files fill the pane with no scrollbar. The mouse
+wheel scrolls the timeline, and trackpad horizontal swipes scroll it directly.
+
+### Experimental
+
+An **EXPERIMENTAL** section at the bottom of the settings flyout enables the **note
+overlay**: draw MIDI notes over the spectrogram with a pencil tool, move/resize/select/
+delete them, and export to a Standard MIDI File or copy them as text. Notes align on any
+frequency scale, with a one-click nudge to the Log scale for evenly-spaced semitone rows.
+It is off by default and has rough edges.
 
 The UI follows QuickLook's light/dark theme. Click the waveform (or the seek bar)
 to jump to a position.
@@ -89,15 +110,14 @@ dotnet test tests/QuickLook.Plugin.AudioViewer.Tests
 
 ## Releases
 
-Pushing a version tag (e.g. `git tag v1.4.0 && git push origin v1.4.0`) runs the
+Pushing a version tag (e.g. `git tag v1.5.0 && git push origin v1.5.0`) runs the
 release workflow, which builds, packages the `.qlplugin`, and attaches it to a
 GitHub Release. CI builds and runs the tests on every push/PR. See
 [CHANGELOG.md](CHANGELOG.md) for release notes.
 
-## Roadmap 
+## Roadmap
 
 - visual presets for waveform
-- mono vs stereo - have a feature that allows seperate each channel if present. this would stack waveform + spec - possibly other things as well.
 
 ## License
 
