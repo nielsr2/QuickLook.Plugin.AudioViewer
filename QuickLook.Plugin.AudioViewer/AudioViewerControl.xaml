@@ -383,6 +383,13 @@
       <ctl:FrequencyRuler x:Name="FreqRuler" Grid.Column="0" Grid.Row="0" Width="46"
                           Visibility="Collapsed"/>
 
+      <!-- Amplitude axis (dBFS), same cell as the frequency ruler but covering the
+           waveform band above it. Both are 46 wide so the shared LeftGutter column keeps
+           a constant width whichever is showing — otherwise the seek bar and horizontal
+           scrollbar, which share that group, would jump sideways as views toggle. -->
+      <ctl:AmplitudeRuler x:Name="AmpRuler" Grid.Column="0" Grid.Row="0" Width="46"
+                          Visibility="Collapsed"/>
+
       <!-- Content column: the scroll + overlays. Internals unchanged. -->
       <Grid x:Name="ContentGrid" Grid.Column="1" Grid.Row="0" ClipToBounds="True">
         <!-- Built-in scrollbar hidden; a dedicated one sits below the time axis (HScroll). -->
@@ -402,7 +409,8 @@
                  MinHeight and don't scroll. Horizontal scrolling stays with the outer
                  ViewScroll (this scroller only handles the vertical lane overflow). -->
             <ScrollViewer x:Name="WaveScroll" Grid.Row="0"
-                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          ScrollChanged="WaveScroll_ScrollChanged">
               <ctl:WaveformView x:Name="Waveform"
                                 MinHeight="{Binding ViewportHeight, ElementName=WaveScroll}"/>
             </ScrollViewer>

@@ -152,6 +152,7 @@ namespace QuickLook.Plugin.AudioViewer
             FreqRuler.SetTheme(axisText, axisLine);
             TimeAxis.SetTheme(axisText, axisLine);
             Colorbar.SetTheme(axisText);
+            AmpRuler.SetTheme(axisText, axisLine);
             Notes.SetTheme(ThemePalette.NoteFill(_isDark), ThemePalette.NoteBorder(_isDark),
                 ThemePalette.NoteSelected(_isDark));
 
@@ -196,6 +197,8 @@ namespace QuickLook.Plugin.AudioViewer
             GainBadge.Visibility = magnified ? Visibility.Visible : Visibility.Collapsed;
             if (magnified)
                 GainBadgeText.Text = (fromAutoFit ? "Auto-fit " : "Zoom ") + WaveformGain.FormatGain(gain);
+
+            RefreshAmplitudeRuler();   // the dB ticks move with the magnification
         }
 
         /// <summary>
@@ -216,6 +219,34 @@ namespace QuickLook.Plugin.AudioViewer
 
         private void GainResetButton_Click(object sender, RoutedEventArgs e)
             => SetWaveformGain(1.0, fromAutoFit: false);
+
+        private void WaveScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            // Lane stacks scroll vertically inside WaveScroll while the ruler sits in the
+            // outer gutter, so it has to be told the offset or its ticks drift off the lanes.
+            if (e.VerticalChange != 0 || e.ExtentHeightChange != 0) RefreshAmplitudeRuler();
+        }
+
+        /// <summary>
+        /// Point the amplitude ruler at the waveform band as it currently stands. Hidden
+        /// whenever the waveform is not on screen, but the control keeps its 46px width so
+        /// the shared left gutter — which the seek bar and scrollbar also sit in — does not
+        /// change size as views toggle.
+        /// </summary>
+        private void RefreshAmplitudeRuler()
+        {
+            var shown = Waveform.Waveform;
+            bool visible = shown != null && WaveScroll.IsVisible && _specTopFraction > 0.01;
+            AmpRuler.Visibility = visible ? Visibility.Visible : Visibility.Hidden;
+            if (!visible) return;
+
+            int lanes = Math.Max(1, shown.ChannelCount);
+            double laneHeightDip = Math.Max(WaveformView.LaneHeight,
+                WaveScroll.ViewportHeight > 0 ? WaveScroll.ViewportHeight / lanes : WaveformView.LaneHeight);
+
+            AmpRuler.Configure(_waveformGain, lanes, _specTopFraction, laneHeightDip,
+                WaveScroll.VerticalOffset);
+        }
 
         private void OnWaveformSeek(double fraction)
         {
@@ -937,6 +968,8 @@ namespace QuickLook.Plugin.AudioViewer
         {
             if (_waveformData == null) return;
             Waveform.Waveform = StereoWaveform.Apply(_waveformData, PluginSettings.StereoMode);
+            // The lane count changes with the stereo mode, so the ruler has to follow.
+            RefreshAmplitudeRuler();
         }
 
         private void FreqCombo_Changed(object sender, SelectionChangedEventArgs e)
@@ -1118,6 +1151,7 @@ namespace QuickLook.Plugin.AudioViewer
             }
             UpdateSpectrogramPlayheadVisibility();
             RefreshAxes();
+            RefreshAmplitudeRuler();   // the waveform band moved
         }
 
         /// <summary>Ensure linear STFT frames are cached (recomputing on FFT-size change), then render.</summary>

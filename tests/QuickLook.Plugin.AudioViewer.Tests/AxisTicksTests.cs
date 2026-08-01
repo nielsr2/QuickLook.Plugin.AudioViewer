@@ -103,6 +103,36 @@ namespace QuickLook.Plugin.AudioViewer.Tests
         }
 
         [Fact]
+        public void DbToFraction_PlacesLevelsWithinTheHalfLane()
+        {
+            // Unmagnified, 0 dBFS is the lane edge and -6 dB is about half way to it.
+            Assert.Equal(1.0, AxisTicks.DbToFraction(0, 1.0), 6);
+            Assert.Equal(0.5012, AxisTicks.DbToFraction(-6, 1.0), 3);
+            Assert.Equal(0.1, AxisTicks.DbToFraction(-20, 1.0), 6);
+
+            // At 8x the lane edge is -18.06 dB, so -20 dB is still just inside and 0 dB
+            // is well past it — which is what the ruler uses to drop off-lane ticks.
+            Assert.InRange(AxisTicks.DbToFraction(-20, 8.0), 0.79, 0.81);
+            Assert.True(AxisTicks.DbToFraction(0, 8.0) > 1.0);
+        }
+
+        [Fact]
+        public void FormatDbFs_IsReadable()
+        {
+            Assert.Equal("0 dB", AxisTicks.FormatDbFs(0));
+            Assert.Equal("-12 dB", AxisTicks.FormatDbFs(-12));
+            Assert.Equal("-6 dB", AxisTicks.FormatDbFs(-6));
+        }
+
+        [Fact]
+        public void NiceDbFs_IsDescendingAndStartsAtFullScale()
+        {
+            Assert.Equal(0, AxisTicks.NiceDbFs[0]);
+            for (int i = 1; i < AxisTicks.NiceDbFs.Length; i++)
+                Assert.True(AxisTicks.NiceDbFs[i] < AxisTicks.NiceDbFs[i - 1]);
+        }
+
+        [Fact]
         public void FormatMagnitude_KeepsResolutionAcrossTheWholeRange()
         {
             Assert.Equal("0", AxisTicks.FormatMagnitude(0));

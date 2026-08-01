@@ -107,6 +107,27 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         }
 
         /// <summary>
+        /// dBFS levels worth labelling on a waveform's amplitude axis, coarsest first.
+        /// A curated ladder rather than a 1-2-5 series: these are the values engineers
+        /// actually reference, and a linear-amplitude axis crowds them toward the centre
+        /// line fast, so the ruler takes as many as fit and drops the rest.
+        /// </summary>
+        internal static readonly double[] NiceDbFs = { 0, -3, -6, -12, -20, -30, -40, -60 };
+
+        /// <summary>
+        /// Where a dBFS level sits within the half-lane, as a fraction of it, at a given
+        /// magnification. Returns &gt; 1 when the level is magnified past the lane edge.
+        /// </summary>
+        internal static double DbToFraction(double db, double gain)
+        {
+            if (gain <= 0) gain = 1.0;
+            return gain * Math.Pow(10.0, db / 20.0);
+        }
+
+        internal static string FormatDbFs(double db)
+            => Math.Abs(db) < 0.05 ? "0 dB" : db.ToString("0") + " dB";
+
+        /// <summary>
         /// Formats a raw linear FFT magnitude for the colorbar legend.
         ///
         /// These span many orders of magnitude and are not normalised: at the default
