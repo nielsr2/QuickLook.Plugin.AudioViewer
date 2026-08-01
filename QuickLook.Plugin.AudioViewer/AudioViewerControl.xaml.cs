@@ -151,6 +151,7 @@ namespace QuickLook.Plugin.AudioViewer
             FileInfoCheck.IsChecked = PluginSettings.ShowFileInfo;
             FileInfoStyleCombo.SelectedIndex = (int)PluginSettings.FileInfoDisplay;
             HoverModeCombo.SelectedIndex = (int)PluginSettings.HoverReadoutMode;
+            MillisecondsCheck.IsChecked = PluginSettings.ShowMilliseconds;
             NoteLayerCheck.IsChecked = PluginSettings.NoteLayerEnabled;
             LayoutCombo.SelectedIndex = (int)PluginSettings.Layout;
             StereoModeCombo.SelectedIndex = (int)PluginSettings.StereoMode;
@@ -433,17 +434,23 @@ namespace QuickLook.Plugin.AudioViewer
         private void UpdateTimeText()
         {
             if (_player == null) return;
-            // Called every ~33ms timer tick; the string only changes about once a second
-            // (seconds resolution), so skip the property write when it's identical to avoid
-            // needless TextBlock invalidation.
-            string text = $"{Fmt(_player.Position)} / {Fmt(_player.Duration)}";
+            // Called every ~33ms timer tick. At seconds resolution the string only changes
+            // about once a second, so skipping an identical write avoids needless TextBlock
+            // invalidation. With milliseconds on it changes nearly every tick and the guard
+            // rarely fires, but it costs one string compare and still pays on pause.
+            bool ms = PluginSettings.ShowMilliseconds;
+            string text = $"{Fmt(_player.Position, ms)} / {Fmt(_player.Duration, ms)}";
             if (TimeText.Text != text) TimeText.Text = text;
         }
 
         // Show hours only when the duration needs them; otherwise stay mm:ss.
-        internal static string Fmt(TimeSpan t) => t.TotalHours >= 1
-            ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}"
-            : $"{(int)t.TotalMinutes:00}:{t.Seconds:00}";
+        internal static string Fmt(TimeSpan t, bool withMilliseconds = false)
+        {
+            string frac = withMilliseconds ? $".{t.Milliseconds:000}" : string.Empty;
+            return t.TotalHours >= 1
+                ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}{frac}"
+                : $"{(int)t.TotalMinutes:00}:{t.Seconds:00}{frac}";
+        }
 
         private void PlayPauseButton_Click(object sender, RoutedEventArgs e) => TogglePlay(!_player?.IsPlaying ?? false);
 
@@ -595,6 +602,15 @@ namespace QuickLook.Plugin.AudioViewer
             if (_initializingSettings || HoverModeCombo.SelectedIndex < 0) return;
             // No re-render needed: this only affects the next hover readout.
             PluginSettings.HoverReadoutMode = (HoverReadoutMode)HoverModeCombo.SelectedIndex;
+        }
+
+        private void MillisecondsCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_initializingSettings) return;
+            PluginSettings.ShowMilliseconds = MillisecondsCheck.IsChecked == true;
+            // Repaint now rather than waiting for the next timer tick, which never comes
+            // when playback is paused or the file has already finished.
+            UpdateTimeText();
         }
 
         // True while the file-info overlay is in the unobtrusive hover-pill mode.

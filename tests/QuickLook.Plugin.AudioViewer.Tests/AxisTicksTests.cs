@@ -56,6 +56,53 @@ namespace QuickLook.Plugin.AudioViewer.Tests
             => Assert.Equal(expected, AxisTicks.FormatTime(seconds));
 
         [Fact]
+        public void DecimalsForStep_MatchesTheStepResolution()
+        {
+            Assert.Equal(0, AxisTicks.DecimalsForStep(1));
+            Assert.Equal(0, AxisTicks.DecimalsForStep(30));
+            Assert.Equal(1, AxisTicks.DecimalsForStep(0.5));
+            Assert.Equal(2, AxisTicks.DecimalsForStep(0.05));
+            Assert.Equal(3, AxisTicks.DecimalsForStep(0.002));
+        }
+
+        [Fact]
+        public void FormatTime_WithDecimals_ShowsSubSecondDetail()
+        {
+            Assert.Equal("0:05", AxisTicks.FormatTime(5));
+            Assert.Equal("0:05.5", AxisTicks.FormatTime(5.5, 1));
+            Assert.Equal("0:05.25", AxisTicks.FormatTime(5.25, 2));
+            Assert.Equal("0:05.125", AxisTicks.FormatTime(5.125, 3));
+            Assert.Equal("1:01:01.500", AxisTicks.FormatTime(3661.5, 3));
+        }
+
+        [Fact]
+        public void FormatTime_RoundingCarriesIntoTheSecondsField()
+        {
+            // 1.9995 s at 3 dp is 2.000 s — the carry must reach seconds rather than
+            // producing "0:01.1000" or "0:01.000".
+            Assert.Equal("0:02.000", AxisTicks.FormatTime(1.9995, 3));
+            Assert.Equal("0:01.0", AxisTicks.FormatTime(0.96, 1));
+        }
+
+        /// <summary>
+        /// The reported symptom: a 2 s file rendered "0:00, 0:00, 0:01, 0:01, 0:02" because
+        /// the step ladder bottomed out at 0.5 s while labels stayed at whole seconds.
+        /// </summary>
+        [Fact]
+        public void ShortFile_ProducesDistinctTickLabels()
+        {
+            double step = AxisTicks.TimeStepSeconds(2.0, 900, 64);
+            Assert.True(step < 1.0, $"expected a sub-second step for a 2 s file, got {step}");
+
+            int decimals = AxisTicks.DecimalsForStep(step);
+            var labels = new System.Collections.Generic.List<string>();
+            foreach (var t in AxisTicks.TimeTicks(2.0, step))
+                labels.Add(AxisTicks.FormatTime(t, decimals));
+
+            Assert.Equal(labels.Count, new System.Collections.Generic.HashSet<string>(labels).Count);
+        }
+
+        [Fact]
         public void FormatMagnitude_KeepsResolutionAcrossTheWholeRange()
         {
             Assert.Equal("0", AxisTicks.FormatMagnitude(0));

@@ -104,6 +104,17 @@ namespace QuickLook.Plugin.AudioViewer.Settings
             set => SettingHelper.Set("HoverReadoutMode", value.ToString(), Domain);
         }
 
+        /// <summary>
+        /// Show milliseconds in the transport readout (00:12.345 rather than 00:12).
+        /// On by default — a preview is often used to find an exact moment, and whole
+        /// seconds are too coarse for that on short files.
+        /// </summary>
+        public static bool ShowMilliseconds
+        {
+            get => SettingHelper.Get("ShowMilliseconds", true, Domain);
+            set => SettingHelper.Set("ShowMilliseconds", value, Domain);
+        }
+
         /// <summary>FFT window length (power of two): 512 / 1024 / 2048 / 4096.</summary>
         public static int FftSize
         {

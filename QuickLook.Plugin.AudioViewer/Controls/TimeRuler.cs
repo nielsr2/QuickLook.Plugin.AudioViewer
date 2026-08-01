@@ -36,16 +36,26 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             if (w <= 0 || _duration <= 0) return;
 
             double step = AxisTicks.TimeStepSeconds(_duration, w, 64);
+            int decimals = AxisTicks.DecimalsForStep(step);
             var pen = new Pen(_line, 1); pen.Freeze();
             double dpi = PixelsPerDip();
+
+            // Ticks are always drawn; labels are skipped when the previous one would still
+            // be under them. FrequencyRuler does the same on its own axis.
+            double lastLabelEnd = double.NegativeInfinity;
 
             foreach (var t in AxisTicks.TimeTicks(_duration, step))
             {
                 double x = t / _duration * w;
                 dc.DrawLine(pen, new Point(x, 0), new Point(x, 4));
-                var ft = Text(AxisTicks.FormatTime(t), dpi);
+
+                var ft = Text(AxisTicks.FormatTime(t, decimals), dpi);
                 double tx = Math.Min(w - ft.Width, x + 2);
-                dc.DrawText(ft, new Point(Math.Max(0, tx), 4));
+                tx = Math.Max(0, tx);
+                if (tx < lastLabelEnd + 4) continue;
+
+                dc.DrawText(ft, new Point(tx, 4));
+                lastLabelEnd = tx + ft.Width;
             }
         }
 

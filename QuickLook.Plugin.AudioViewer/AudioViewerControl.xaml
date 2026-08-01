@@ -238,10 +238,15 @@
                       Margin="0,0,0,8" Checked="FileInfoCheck_Changed" Unchecked="FileInfoCheck_Changed"/>
 
             <TextBlock Text="File info style" Style="{StaticResource SettingsFieldLabel}"/>
-            <ComboBox x:Name="FileInfoStyleCombo" SelectionChanged="FileInfoStyleCombo_Changed">
+            <ComboBox x:Name="FileInfoStyleCombo" Margin="0,0,0,8" SelectionChanged="FileInfoStyleCombo_Changed">
               <ComboBoxItem Content="Icon (hover)"/>
               <ComboBoxItem Content="Draggable box"/>
             </ComboBox>
+
+            <CheckBox x:Name="MillisecondsCheck" Content="Milliseconds in time readout"
+                      Foreground="{DynamicResource PrimaryText}" Margin="0,0,0,8"
+                      Checked="MillisecondsCheck_Changed" Unchecked="MillisecondsCheck_Changed"
+                      ToolTip="Show the playhead and duration as mm:ss.mmm instead of mm:ss"/>
 
             <!-- ===== WAVEFORM: how a stereo file's waveform is drawn (stereo only) ===== -->
             <Border Style="{StaticResource SettingsSeparator}"/>

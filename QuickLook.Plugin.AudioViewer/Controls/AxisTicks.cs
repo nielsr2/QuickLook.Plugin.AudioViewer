@@ -39,10 +39,27 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             if (durationSeconds <= 0 || widthPixels <= 0) return 1.0;
             double pxPerSec = widthPixels / durationSeconds;
             double minStep = minPxPerLabel / pxPerSec;
-            double[] steps = { 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600 };
+            // The ladder previously bottomed out at 0.5 s. On a short file that forced
+            // half-second ticks to be labelled with whole-second precision, so a 2 s clip
+            // rendered "0:00, 0:00, 0:01, 0:01, 0:02" — every label duplicated. Sub-second
+            // steps let DecimalsForStep give those ticks the precision they need.
+            double[] steps = { 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5,
+                               1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600 };
             foreach (var s in steps)
                 if (s >= minStep) return s;
             return steps[steps.Length - 1];
+        }
+
+        /// <summary>
+        /// How many fractional-second digits a tick label needs so that adjacent ticks
+        /// spaced <paramref name="stepSeconds"/> apart do not render identically.
+        /// </summary>
+        internal static int DecimalsForStep(double stepSeconds)
+        {
+            if (stepSeconds >= 1.0) return 0;
+            if (stepSeconds >= 0.1) return 1;
+            if (stepSeconds >= 0.01) return 2;
+            return 3;
         }
 
         internal static double[] TimeTicks(double durationSeconds, double stepSeconds)
@@ -64,13 +81,29 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             return Math.Round(hz).ToString("0") + " Hz";
         }
 
-        internal static string FormatTime(double seconds)
+        /// <param name="decimals">
+        /// Fractional-second digits (0-3). Use <see cref="DecimalsForStep"/> to derive this
+        /// from the axis tick spacing so short files do not render duplicate labels.
+        /// </param>
+        internal static string FormatTime(double seconds, int decimals = 0)
         {
             if (seconds < 0) seconds = 0;
+            if (decimals < 0) decimals = 0; else if (decimals > 3) decimals = 3;
             var t = TimeSpan.FromSeconds(seconds);
+
+            // Build the fraction from the rounded total so 1.9995 s at 3 dp does not
+            // render as "0:01.1000" — carry has to reach the seconds field.
+            double scale = Math.Pow(10, decimals);
+            double rounded = Math.Round(seconds * scale, MidpointRounding.AwayFromZero) / scale;
+            t = TimeSpan.FromSeconds(rounded);
+
+            string frac = decimals == 0
+                ? string.Empty
+                : "." + ((int)Math.Round((rounded - Math.Floor(rounded)) * scale)).ToString(new string('0', decimals));
+
             return t.TotalHours >= 1
-                ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}"
-                : $"{(int)t.TotalMinutes}:{t.Seconds:00}";
+                ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}{frac}"
+                : $"{(int)t.TotalMinutes}:{t.Seconds:00}{frac}";
         }
 
         /// <summary>
