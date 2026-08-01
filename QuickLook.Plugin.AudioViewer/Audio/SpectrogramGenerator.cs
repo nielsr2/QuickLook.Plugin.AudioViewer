@@ -66,7 +66,14 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                 window[i] = (float)FastFourierTransform.HammingWindow(i, fftSize);
 
             var frames = new List<float[]>();
+            // Circular sliding window. `write` is the next slot to fill, which — once the
+            // buffer is full — is also the oldest sample, i.e. the window's logical start.
+            // This previously shifted the entire window down one slot for every input
+            // sample, which is O(totalSamples * fftSize): tens of GB of memmove for a few
+            // minutes of audio, dwarfing the FFT work itself. Indexing instead makes the
+            // scan cost proportional to the number of frames actually emitted.
             var ring = new float[fftSize];
+            int write = 0;
             int filled = 0;
             var readBuf = new float[channels * 4096];
             int read;
@@ -82,15 +89,9 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                     for (int c = 0; c < channels; c++) mono += readBuf[i + c];
                     mono /= channels;
 
-                    if (filled < fftSize)
-                    {
-                        ring[filled++] = mono;
-                    }
-                    else
-                    {
-                        Array.Copy(ring, 1, ring, 0, fftSize - 1);
-                        ring[fftSize - 1] = mono;
-                    }
+                    ring[write] = mono;
+                    if (++write == fftSize) write = 0;
+                    if (filled < fftSize) filled++;
 
                     if (filled >= fftSize)
                     {
@@ -98,7 +99,7 @@ namespace QuickLook.Plugin.AudioViewer.Audio
                         if (sinceLastFrame >= hop)
                         {
                             sinceLastFrame = 0;
-                            frames.Add(Fft(ring, window, fftSize, log2, bins));
+                            frames.Add(Fft(ring, write, window, fftSize, log2, bins));
                             if (frames.Count >= maxFrames) { capped = true; return frames.ToArray(); }
                         }
                     }
@@ -106,18 +107,29 @@ namespace QuickLook.Plugin.AudioViewer.Audio
             }
 
             // one final frame if we have a full window but never hit the hop.
+            // While filling, `write` == `filled`; on the sample that fills the window it
+            // wraps to 0 — so it is the correct window start in both cases.
             if (filled >= fftSize && frames.Count == 0)
-                frames.Add(Fft(ring, window, fftSize, log2, bins));
+                frames.Add(Fft(ring, write, window, fftSize, log2, bins));
 
             return frames.ToArray();
         }
 
-        private static float[] Fft(float[] samples, float[] window, int fftSize, int log2, int bins)
+        /// <param name="start">
+        /// Index of the oldest sample in the circular <paramref name="ring"/>; the window is
+        /// read oldest-first from there. Pass 0 for a plain chronological buffer.
+        /// </param>
+        private static float[] Fft(float[] ring, int start, float[] window, int fftSize, int log2, int bins)
         {
             var complex = new Complex[fftSize];
             for (int i = 0; i < fftSize; i++)
             {
-                complex[i].X = samples[i] * window[i];
+                // start < fftSize and i < fftSize, so start + i < 2 * fftSize: one
+                // conditional subtract wraps it. Unlike a bitmask this does not quietly
+                // assume fftSize is a power of two.
+                int idx = start + i;
+                if (idx >= fftSize) idx -= fftSize;
+                complex[i].X = ring[idx] * window[i];
                 complex[i].Y = 0f;
             }
             FastFourierTransform.FFT(true, log2, complex);

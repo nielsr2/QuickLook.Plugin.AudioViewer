@@ -245,5 +245,33 @@ namespace QuickLook.Plugin.AudioViewer.Tests
                 return written;
             }
         }
+
+        /// <summary>
+        /// A finite mono ISampleProvider over a fixed sample array. Unlike
+        /// <see cref="FixedChannelSampleProvider"/> it ends, which is what lets a test
+        /// place energy at one exact sample index and assert which STFT frames see it.
+        /// </summary>
+        public sealed class MonoArraySampleProvider : NAudio.Wave.ISampleProvider
+        {
+            private readonly float[] _samples;
+            private int _pos;
+
+            public MonoArraySampleProvider(float[] samples, int sampleRate = 44100)
+            {
+                _samples = samples;
+                WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, 1);
+            }
+
+            public WaveFormat WaveFormat { get; }
+
+            public int Read(float[] buffer, int offset, int count)
+            {
+                int n = Math.Min(count, _samples.Length - _pos);
+                if (n <= 0) return 0;
+                Array.Copy(_samples, _pos, buffer, offset, n);
+                _pos += n;
+                return n;
+            }
+        }
     }
 }
