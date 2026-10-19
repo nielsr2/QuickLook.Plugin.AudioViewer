@@ -77,13 +77,13 @@
 
     <!-- Clickable scale label in the plot's bottom-left corner (FreqScaleBadge / AmpScaleBadge).
          A TextBlock, so it can never take keyboard focus away from Explorer's arrow keys.
-         Right-aligned to line up with the frequency ruler's labels above it. -->
+         Left-aligned into the corner, under the pane edge rather than the ruler numbers. -->
     <Style x:Key="ScaleBadge" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="FontSize" Value="10"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="HorizontalAlignment" Value="Right"/>
+      <Setter Property="HorizontalAlignment" Value="Left"/>
       <Setter Property="Padding" Value="2,0"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Visibility" Value="Collapsed"/>
@@ -635,7 +635,7 @@
            "Hz LOG" over "Amp dB²" (prefixed, since both can read LIN). Shown with the ruler
            (RefreshAxes); a click cycles to the next scale through the settings combo, so the
            two can never disagree. -->
-      <StackPanel Grid.Column="0" Grid.Row="1" Margin="0,2,0,0">
+      <StackPanel Grid.Column="0" Grid.Row="1" Margin="0,7,0,0">
         <TextBlock x:Name="FreqScaleBadge" Style="{StaticResource ScaleBadge}"
                    MouseLeftButtonUp="FreqScaleBadge_Click"/>
         <TextBlock x:Name="AmpScaleBadge" Style="{StaticResource ScaleBadge}"
