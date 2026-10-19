@@ -1,0 +1,81 @@
+name: build
+
+# Every push to master (and every PR) builds, tests and packs the plugin, leaving the
+# .qlplugin as a downloadable artifact on the run. Pushing a version tag additionally
+# publishes it as a GitHub Release:
+#   git tag -a v1.6.0 -m "v1.6.0" && git push origin v1.6.0
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest   # WPF + .NET Framework 4.8 + PowerShell packaging need Windows
+    # The tag-triggered release step needs write access to create a Release and upload
+    # the .qlplugin asset to it.
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout (with QuickLook.Common submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore QuickLook.Plugin.AudioViewer.sln
+
+      - name: Build (Release)
+        run: dotnet build QuickLook.Plugin.AudioViewer.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test QuickLook.Plugin.AudioViewer.sln -c Release --no-build --verbosity normal
+
+      - name: Pack .qlplugin
+        run: powershell -File Scripts/pack-zip.ps1
+
+      - name: Upload .qlplugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuickLook.Plugin.AudioViewer.qlplugin
+          path: QuickLook.Plugin.AudioViewer.qlplugin
+          if-no-files-found: error
+
+      # The tag name is the one release input nothing else validates: the package is
+      # stamped from $(PluginVersion), so a mismatched tag would ship a plugin reporting
+      # the wrong version. Fail instead, and pull that version's CHANGELOG section out as
+      # the Release notes.
+      - name: Check tag matches PluginVersion, extract release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}' -replace '^v',''
+          $props = [xml](Get-Content Directory.Build.props)
+          $declared = ($props.Project.PropertyGroup | Where-Object { $_.PluginVersion } |
+                       Select-Object -First 1).PluginVersion
+          if ($declared.Trim() -ne $version) {
+            throw "Tag v$version does not match PluginVersion $($declared.Trim())"
+          }
+          $text = Get-Content CHANGELOG.md -Raw
+          $pattern = "(?ms)^## \[$([regex]::Escape($version))\][^\r\n]*\r?\n(.*?)(?=^## \[|\z)"
+          $m = [regex]::Match($text, $pattern)
+          if (-not $m.Success) { throw "No CHANGELOG section for $version" }
+          $m.Groups[1].Value.Trim() | Set-Content RELEASE_NOTES.md -Encoding utf8
+          Write-Host "--- release notes ---"
+          Get-Content RELEASE_NOTES.md
+
+      - name: Publish Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: QuickLook.Plugin.AudioViewer.qlplugin
+          body_path: RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

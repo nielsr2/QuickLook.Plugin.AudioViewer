@@ -8,7 +8,7 @@
     submodule or the test project (they never reference it).
   -->
   <PropertyGroup>
-    <PluginVersion>1.5.0</PluginVersion>
+    <PluginVersion>1.6.0</PluginVersion>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework'">

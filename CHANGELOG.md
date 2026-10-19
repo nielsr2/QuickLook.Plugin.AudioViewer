@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-10-19
+
 ### Added
 - Vertical waveform zoom. Quiet files are auto-fitted on load (99th-percentile, so a
   single transient does not defeat it), and Alt + wheel over the waveform magnifies
