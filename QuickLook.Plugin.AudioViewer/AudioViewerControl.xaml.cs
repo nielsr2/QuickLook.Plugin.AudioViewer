@@ -1081,9 +1081,10 @@ namespace QuickLook.Plugin.AudioViewer
 
         private void UpdateScaleBadges()
         {
-            FreqScaleBadge.Text = ScaleBadge.Short(PluginSettings.FreqScale);
+            // Prefixed because both can read "LIN"; the bare names stay in ScaleBadge.
+            FreqScaleBadge.Text = "Hz " + ScaleBadge.Short(PluginSettings.FreqScale);
             FreqScaleBadge.ToolTip = $"Frequency scale: {ComboText(FreqCombo)} (click to change)";
-            AmpScaleBadge.Text = ScaleBadge.Short(PluginSettings.AmpScale);
+            AmpScaleBadge.Text = "Amp " + ScaleBadge.Short(PluginSettings.AmpScale);
             AmpScaleBadge.ToolTip = $"Amplitude scale: {ComboText(AmpCombo)} (click to change)";
             FreqScaleBadge.Visibility = Visibility.Visible;
             AmpScaleBadge.Visibility = Visibility.Visible;

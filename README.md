@@ -9,7 +9,7 @@ files (`.wav .mp3 .flac .ogg .oga .m4a .aac .wma .aif .aiff`) with a waveform,
 a moving playhead, playback transport (play/pause, seek, volume, persisted
 auto-play), and a configurable spectrogram.
 
-![QuickLook.Plugin.AudioViewer previewing a WAV file — waveform above a magma spectrogram, with the draggable file-info overlay](assets/screenshot.png)
+![QuickLook.Plugin.AudioViewer previewing an AIFF file — auto-fitted waveform with a dB ruler above a magma spectrogram, with frequency ruler, colorbar, time axis and playhead](assets/screenshot.png)
 
 ## Waveform and channels
 
@@ -30,7 +30,7 @@ A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
 - **Layout** — *Stacked* (waveform above spectrogram, the default) or *Single view*
   (a button toggles between the full-area waveform and spectrogram).
 - **Frequency scale** — Linear, Log, or Mel. The active frequency and amplitude scales
-  are shown in the plot's bottom corners; click either to cycle it.
+  are shown under the frequency ruler (`Hz LOG` / `Amp dB²`); click either to cycle it.
 - **Amplitude** — Decibel (dB) or Linear.
 - **Colormap** — Magma, Viridis, Grayscale, Inferno, Plasma, Turbo, or Heat (RX-style).
 - **Reverse colormap** — flip any map light-based (for print / light backgrounds).

@@ -1,8 +1,9 @@
 namespace QuickLook.Plugin.AudioViewer.Settings
 {
     /// <summary>
-    /// Short labels for the active scales, shown in the plot's bottom corners (frequency under
-    /// the frequency ruler, amplitude under the colorbar). Clicking one cycles to the next scale.
+    /// Short labels for the active scales, stacked in the plot's bottom-left corner under the
+    /// frequency ruler (the control prefixes them "Hz " / "Amp "). Clicking one cycles to the
+    /// next scale.
     /// </summary>
     internal static class ScaleBadge
     {

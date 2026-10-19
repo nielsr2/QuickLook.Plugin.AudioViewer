@@ -75,16 +75,16 @@
       <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
 
-    <!-- Clickable scale label in a plot corner (FreqScaleBadge / AmpScaleBadge). A TextBlock,
-         so it can never take keyboard focus away from Explorer's arrow keys. -->
+    <!-- Clickable scale label in the plot's bottom-left corner (FreqScaleBadge / AmpScaleBadge).
+         A TextBlock, so it can never take keyboard focus away from Explorer's arrow keys.
+         Right-aligned to line up with the frequency ruler's labels above it. -->
     <Style x:Key="ScaleBadge" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="FontSize" Value="10"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="HorizontalAlignment" Value="Center"/>
-      <Setter Property="VerticalAlignment" Value="Center"/>
-      <Setter Property="Padding" Value="4,1"/>
+      <Setter Property="HorizontalAlignment" Value="Right"/>
+      <Setter Property="Padding" Value="2,0"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Visibility" Value="Collapsed"/>
       <Style.Triggers>
@@ -626,17 +626,21 @@
            visible slice of the timeline, taking the scroll offset from ViewScroll. It was
            previously as wide as the whole timeline and slid under this Grid's clip with a
            RenderTransform, which WPF's layout clip silently truncated — see TimeRuler. -->
-      <Grid Grid.Column="1" Grid.Row="1" ClipToBounds="True" Height="18">
+      <!-- Top-aligned: the scale badges beside it can make this row taller than the ruler. -->
+      <Grid Grid.Column="1" Grid.Row="1" ClipToBounds="True" Height="18" VerticalAlignment="Top">
         <ctl:TimeRuler x:Name="TimeAxis" Visibility="Collapsed"/>
       </Grid>
 
-      <!-- Active scales, in the otherwise empty bottom corners: frequency under the frequency
-           ruler, amplitude under the colorbar. Shown with them (RefreshAxes); a click cycles to
-           the next scale through the settings combo, so the two can never disagree. -->
-      <TextBlock x:Name="FreqScaleBadge" Grid.Column="0" Grid.Row="1" Style="{StaticResource ScaleBadge}"
-                 MouseLeftButtonUp="FreqScaleBadge_Click"/>
-      <TextBlock x:Name="AmpScaleBadge" Grid.Column="2" Grid.Row="1" Style="{StaticResource ScaleBadge}"
-                 Margin="6,0,0,0" MouseLeftButtonUp="AmpScaleBadge_Click"/>
+      <!-- Active scales, stacked in the otherwise empty corner under the frequency ruler:
+           "Hz LOG" over "Amp dB²" (prefixed, since both can read LIN). Shown with the ruler
+           (RefreshAxes); a click cycles to the next scale through the settings combo, so the
+           two can never disagree. -->
+      <StackPanel Grid.Column="0" Grid.Row="1" Margin="0,2,0,0">
+        <TextBlock x:Name="FreqScaleBadge" Style="{StaticResource ScaleBadge}"
+                   MouseLeftButtonUp="FreqScaleBadge_Click"/>
+        <TextBlock x:Name="AmpScaleBadge" Style="{StaticResource ScaleBadge}"
+                   MouseLeftButtonUp="AmpScaleBadge_Click"/>
+      </StackPanel>
     </Grid>
 
     <!-- Horizontal scrollbar for long files, placed below the time axis (well clear

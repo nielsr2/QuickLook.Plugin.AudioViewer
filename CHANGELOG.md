@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- The amplitude-scale label moved from under the colorbar to under the frequency-scale
+  label, and both are now prefixed (`Hz LOG` over `Amp dB²`). They could both read `LIN`,
+  so on its own the right-hand one wasn't recognisable. Click either to cycle it, as before.
+- New README screenshot.
+
 ## [1.6.0] — 2026-10-19
 
 ### Added
