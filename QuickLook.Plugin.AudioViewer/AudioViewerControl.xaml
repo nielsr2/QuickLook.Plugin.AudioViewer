@@ -3,7 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ctl="clr-namespace:QuickLook.Plugin.AudioViewer.Controls"
              Focusable="True" PreviewKeyDown="OnPreviewKeyDown"
+             KeyboardNavigation.DirectionalNavigation="None"
+             KeyboardNavigation.TabNavigation="None"
+             FocusVisualStyle="{x:Null}"
              Background="{DynamicResource AppBackground}">
+  <!-- Arrow keys belong to Explorer: QuickLook shows its window unactivated, the arrows
+       move Explorer's selection, and the preview follows. So this control never takes
+       focus on its own (no Focus() on load). Once the user clicks into the preview,
+       directional navigation is off and the main-pane controls are Focusable="False",
+       so a focused Slider/ScrollViewer/ComboBox can't eat the arrows either. -->
   <!-- Brush keys are overwritten per light/dark theme in the constructor
        (ThemePalette.Apply). These defaults are the dark palette so the control
        still resolves them if applied late. -->
@@ -67,6 +75,26 @@
       <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
 
+    <!-- Clickable scale label in a plot corner (FreqScaleBadge / AmpScaleBadge). A TextBlock,
+         so it can never take keyboard focus away from Explorer's arrow keys. -->
+    <Style x:Key="ScaleBadge" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryText}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="HorizontalAlignment" Value="Center"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Padding" Value="4,1"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Visibility" Value="Collapsed"/>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+          <Setter Property="TextDecorations" Value="Underline"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
     <!-- Corner grip that resizes the settings popup (see SettingsResizeGrip_DragDelta). -->
     <Style x:Key="SettingsResizeGrip" TargetType="Thumb">
       <Setter Property="Width" Value="14"/>
@@ -111,8 +139,9 @@
         <ColumnDefinition Width="Auto"/>   <!-- settings -->
       </Grid.ColumnDefinitions>
 
-      <Button x:Name="PlayPauseButton" Grid.Column="0" Width="40" Height="28"
-              Content="&#9654;" Click="PlayPauseButton_Click"/>
+      <Button x:Name="PlayPauseButton" Focusable="False" Grid.Column="0" Width="40" Height="28"
+              Content="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="14" Padding="0"
+              ToolTip="Play / pause (K)" Click="PlayPauseButton_Click"/>
       <TextBlock x:Name="TimeText" Grid.Column="1" VerticalAlignment="Center"
                  Foreground="{DynamicResource PrimaryText}" Margin="10,0" Text="00:00 / 00:00"/>
 
@@ -125,18 +154,18 @@
                   Margin="16,0,0,0" Visibility="Collapsed">
         <TextBlock x:Name="GainBadgeText" Foreground="{DynamicResource SecondaryText}"
                    FontSize="11" VerticalAlignment="Center" MinWidth="86"/>
-        <Slider x:Name="GainSlider" Width="90" Margin="4,0,0,0" VerticalAlignment="Center"
+        <Slider x:Name="GainSlider" Focusable="False" Width="90" Margin="4,0,0,0" VerticalAlignment="Center"
                 Visibility="Collapsed" Minimum="0" Maximum="6"
                 SmallChange="0.25" LargeChange="1"
                 ValueChanged="GainSlider_Changed"
                 ToolTip="Waveform vertical zoom"/>
-        <Button x:Name="GainResetButton" Content="reset" Margin="6,0,0,0" Padding="4,0"
+        <Button x:Name="GainResetButton" Focusable="False" Content="reset" Margin="6,0,0,0" Padding="4,0"
                 FontSize="11" Background="Transparent" BorderThickness="0"
                 Foreground="{DynamicResource SecondaryText}" Cursor="Hand"
                 Click="GainResetButton_Click" ToolTip="Reset vertical zoom to 1x (0)"/>
       </StackPanel>
       <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="8,0" VerticalAlignment="Center">
-        <Button x:Name="MuteButton" Content="&#xE767;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+        <Button x:Name="MuteButton" Focusable="False" Content="&#xE767;" FontFamily="Segoe MDL2 Assets" FontSize="14"
                 Foreground="{DynamicResource PrimaryText}" VerticalAlignment="Center" Margin="0,0,5,0"
                 Cursor="Hand" ToolTip="Mute / unmute (M)" Click="MuteButton_Click">
           <!-- Chrome-free: render the glyph only, so it reads as an icon not a button. -->
@@ -148,18 +177,18 @@
             </ControlTemplate>
           </Button.Template>
         </Button>
-        <Slider x:Name="VolumeSlider" Width="80" VerticalAlignment="Center"
+        <Slider x:Name="VolumeSlider" Focusable="False" Width="80" VerticalAlignment="Center"
                 Minimum="0" Maximum="1" Value="0.8" ValueChanged="VolumeSlider_ValueChanged"/>
       </StackPanel>
-      <CheckBox x:Name="AutoPlayCheck" Grid.Column="4" VerticalAlignment="Center"
+      <CheckBox x:Name="AutoPlayCheck" Focusable="False" Grid.Column="4" VerticalAlignment="Center"
                 Foreground="{DynamicResource PrimaryText}" Content="Auto-play"
                 Checked="AutoPlayCheck_Changed" Unchecked="AutoPlayCheck_Changed"/>
 
-      <ToggleButton x:Name="SettingsButton" Grid.Column="5" Width="30" Height="28"
+      <ToggleButton x:Name="SettingsButton" Focusable="False" Grid.Column="5" Width="30" Height="28"
                     Margin="6,0,0,0" Content="&#xE713;" FontFamily="Segoe MDL2 Assets"
                     FontSize="14" Padding="0" ToolTip="Spectrogram settings"/>
       <Popup PlacementTarget="{Binding ElementName=SettingsButton}" Placement="Bottom"
-             StaysOpen="False" AllowsTransparency="True"
+             StaysOpen="False" AllowsTransparency="True" Closed="SettingsPopup_Closed"
              IsOpen="{Binding IsChecked, ElementName=SettingsButton, Mode=TwoWay}">
         <!-- Size is set in code from the remembered PluginSettings values, re-clamped to the
              current screen (SettingsPaneMetrics) so a size saved on a bigger monitor can't
@@ -392,7 +421,7 @@
         <ColumnDefinition Width="*"/>
         <ColumnDefinition Width="Auto" SharedSizeGroup="RightGutter"/>
       </Grid.ColumnDefinitions>
-      <Slider x:Name="SeekSlider" Grid.Column="1" VerticalAlignment="Center"
+      <Slider x:Name="SeekSlider" Focusable="False" Grid.Column="1" VerticalAlignment="Center"
               Minimum="0" Maximum="1" SmallChange="0.01" LargeChange="0.05"
               IsMoveToPointEnabled="True"
               Thumb.DragStarted="SeekSlider_DragStarted"
@@ -431,7 +460,7 @@
       <!-- Content column: the scroll + overlays. Internals unchanged. -->
       <Grid x:Name="ContentGrid" Grid.Column="1" Grid.Row="0" ClipToBounds="True">
         <!-- Built-in scrollbar hidden; a dedicated one sits below the time axis (HScroll). -->
-        <ScrollViewer x:Name="ViewScroll" HorizontalScrollBarVisibility="Hidden"
+        <ScrollViewer x:Name="ViewScroll" Focusable="False" HorizontalScrollBarVisibility="Hidden"
                       VerticalScrollBarVisibility="Disabled"
                       PreviewMouseWheel="ViewScroll_PreviewMouseWheel"
                       ScrollChanged="ViewScroll_ScrollChanged">
@@ -446,7 +475,7 @@
             <!-- Vertical scroll for many-channel lane stacks; mono/stereo fill the row via
                  MinHeight and don't scroll. Horizontal scrolling stays with the outer
                  ViewScroll (this scroller only handles the vertical lane overflow). -->
-            <ScrollViewer x:Name="WaveScroll" Grid.Row="0"
+            <ScrollViewer x:Name="WaveScroll" Focusable="False" Grid.Row="0"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           ScrollChanged="WaveScroll_ScrollChanged">
               <ctl:WaveformView x:Name="Waveform"
@@ -539,7 +568,7 @@
                 Margin="10,10,0,0" Padding="3" CornerRadius="10" Background="{DynamicResource OverlayBackground}"
                 BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1" Visibility="Collapsed">
           <StackPanel Orientation="Horizontal">
-            <ToggleButton x:Name="DrawToggle" Width="27" Height="24" Padding="0" Cursor="Hand"
+            <ToggleButton x:Name="DrawToggle" Focusable="False" Width="27" Height="24" Padding="0" Cursor="Hand"
                           ToolTip="Draw notes (pencil)" Click="DrawToggle_Click"
                           Foreground="{DynamicResource OverlayText}">
               <ToggleButton.Template>
@@ -560,11 +589,11 @@
                 </ControlTemplate>
               </ToggleButton.Template>
             </ToggleButton>
-            <Button x:Name="SaveMidiButton" Style="{StaticResource NoteToolBtn}" IsEnabled="False"
+            <Button x:Name="SaveMidiButton" Focusable="False" Style="{StaticResource NoteToolBtn}" IsEnabled="False"
                     ToolTip="Save as MIDI…" Click="SaveMidiButton_Click">
               <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
             </Button>
-            <Button x:Name="CopyNotesButton" Style="{StaticResource NoteToolBtn}" IsEnabled="False"
+            <Button x:Name="CopyNotesButton" Focusable="False" Style="{StaticResource NoteToolBtn}" IsEnabled="False"
                     ToolTip="Copy notes as text" Click="CopyNotesButton_Click">
               <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
             </Button>
@@ -579,9 +608,9 @@
           <StackPanel Orientation="Horizontal">
             <TextBlock Text="Notes bunch on this scale — switch to Log for even semitone rows?"
                        Foreground="{DynamicResource OverlayText}" VerticalAlignment="Center" FontSize="11"/>
-            <Button x:Name="NoteSuggestSwitch" Content="Switch to Log" Margin="10,0,4,0" Padding="8,2"
+            <Button x:Name="NoteSuggestSwitch" Focusable="False" Content="Switch to Log" Margin="10,0,4,0" Padding="8,2"
                     Cursor="Hand" Click="NoteSuggestionSwitch_Click"/>
-            <Button x:Name="NoteSuggestDismiss" Style="{StaticResource NoteToolBtn}" Width="22"
+            <Button x:Name="NoteSuggestDismiss" Focusable="False" Style="{StaticResource NoteToolBtn}" Width="22"
                     ToolTip="Dismiss" Click="NoteSuggestionDismiss_Click">
               <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10"/>
             </Button>
@@ -600,6 +629,14 @@
       <Grid Grid.Column="1" Grid.Row="1" ClipToBounds="True" Height="18">
         <ctl:TimeRuler x:Name="TimeAxis" Visibility="Collapsed"/>
       </Grid>
+
+      <!-- Active scales, in the otherwise empty bottom corners: frequency under the frequency
+           ruler, amplitude under the colorbar. Shown with them (RefreshAxes); a click cycles to
+           the next scale through the settings combo, so the two can never disagree. -->
+      <TextBlock x:Name="FreqScaleBadge" Grid.Column="0" Grid.Row="1" Style="{StaticResource ScaleBadge}"
+                 MouseLeftButtonUp="FreqScaleBadge_Click"/>
+      <TextBlock x:Name="AmpScaleBadge" Grid.Column="2" Grid.Row="1" Style="{StaticResource ScaleBadge}"
+                 Margin="6,0,0,0" MouseLeftButtonUp="AmpScaleBadge_Click"/>
     </Grid>
 
     <!-- Horizontal scrollbar for long files, placed below the time axis (well clear
@@ -616,9 +653,9 @@
 
     <!-- Channel selector (multichannel files only) + spectrogram toggle -->
     <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-      <ComboBox x:Name="ChannelCombo" Width="140" Margin="0,0,8,0" Visibility="Collapsed"
+      <ComboBox x:Name="ChannelCombo" Focusable="False" Width="140" Margin="0,0,8,0" Visibility="Collapsed"
                 VerticalAlignment="Center" SelectionChanged="ChannelCombo_Changed"/>
-      <Button x:Name="SpectrogramButton" Padding="10,4" Content="Spectrogram ▸"
+      <Button x:Name="SpectrogramButton" Focusable="False" Padding="10,4" Content="Spectrogram ▸"
               Click="SpectrogramButton_Click"/>
     </StackPanel>
   </Grid>

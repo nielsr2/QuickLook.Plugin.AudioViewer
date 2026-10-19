@@ -20,6 +20,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   background detail and upper partials that the plain dB scale crushes toward black.
 - Appearance setting — Follow QuickLook / Light / Dark — overriding the host's theme.
 - Customizable waveform colour, with nine presets plus the theme default.
+- The active frequency scale (`LIN` / `LOG` / `MEL`) and amplitude scale (`dB` / `LIN` /
+  `dB²`) are shown in the plot's bottom corners, under the frequency ruler and the
+  colorbar. Click either one to cycle to the next scale.
 
 ### Changed
 - Reverse colormap is now Never / Always / Auto (light mode only), replacing the on-off
@@ -32,6 +35,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Shift + wheel forces the time axis, so the timeline stays reachable over a lane stack.
 
 ### Fixed
+- The arrow keys switch to the previous/next file in Explorer again. The preview no
+  longer takes keyboard focus away from Explorer when it opens (the first ↓ used to
+  land on the volume slider). K/J/L/M/+/−/0 now work once you click the preview.
+- Time-axis labels no longer pile up at the right edge. The label at the edge (e.g. `0:10`
+  while scrolled near the start) was pulled left onto its neighbour. Now only the file's
+  final label is kept on screen, and it is dropped if it would collide.
+- The play/pause button uses the same icon font as the mute and settings buttons, centred
+  instead of sitting low and clipped.
 - The colorbar legend no longer renders every tick as `0.00` in linear mode. The values
   are raw FFT magnitudes spanning several orders of magnitude, and a fixed two-decimal
   format collapsed them.

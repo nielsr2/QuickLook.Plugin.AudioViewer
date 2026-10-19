@@ -91,6 +91,23 @@ namespace QuickLook.Plugin.AudioViewer.Controls
         }
 
         /// <summary>
+        /// Left edge for a tick label, or null to skip it. A label sits just right of its tick
+        /// and clips with the content. Only the file's final label is pulled left to stay on
+        /// screen, and if that would put it on top of the previous label it is dropped instead.
+        /// </summary>
+        /// <param name="isFinalTick">The tick at the file's end, not merely the last visible one:
+        /// pulling in whichever tick sat at the right edge dragged it onto its neighbour.</param>
+        internal static double? LabelLeft(double tickX, double labelWidth, double viewportWidth,
+            bool isFinalTick, double previousLabelRight)
+        {
+            const double gap = 6; // same clearance VisibleTicks reserves between labels
+            double left = tickX + 2;
+            if (isFinalTick && left + labelWidth > viewportWidth) left = viewportWidth - labelWidth;
+            if (left < previousLabelRight + gap) return null;
+            return left;
+        }
+
+        /// <summary>
         /// How many fractional-second digits a tick label needs so that adjacent ticks
         /// spaced <paramref name="stepSeconds"/> apart do not render identically.
         /// </summary>

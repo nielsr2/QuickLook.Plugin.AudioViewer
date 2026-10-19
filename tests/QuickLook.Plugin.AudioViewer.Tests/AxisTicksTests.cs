@@ -207,6 +207,35 @@ namespace QuickLook.Plugin.AudioViewer.Tests
         }
 
         [Fact]
+        public void LabelLeft_SitsJustRightOfItsTick()
+        {
+            Assert.Equal(102.0, AxisTicks.LabelLeft(100, 24, 750, false, double.NegativeInfinity));
+        }
+
+        [Fact]
+        public void LabelLeft_DoesNotPullAMidFileTickOntoItsNeighbour()
+        {
+            // The reported overlap: a 74 s file scrolled to show 0:00-0:10. "0:09" sits at
+            // x=700 (right edge 726); "0:10"'s tick is just past the 750px edge. It is not the
+            // file's end, so it must stay with its tick and clip, not be dragged onto "0:09".
+            double? left = AxisTicks.LabelLeft(752, 24, 750, false, 726);
+            Assert.Equal(754.0, left);
+        }
+
+        [Fact]
+        public void LabelLeft_KeepsTheFilesFinalLabelOnScreen()
+        {
+            Assert.Equal(726.0, AxisTicks.LabelLeft(745, 24, 750, true, 600));
+        }
+
+        [Fact]
+        public void LabelLeft_DropsTheFinalLabelRatherThanOverlapTheOneBeforeIt()
+        {
+            // Pulled left to 726, it would sit inside the 6px gap after a label ending at 724.
+            Assert.Null(AxisTicks.LabelLeft(745, 24, 750, true, 724));
+        }
+
+        [Fact]
         public void VisibleTicks_DegenerateInputsProduceAnEmptyRange()
         {
             AxisTicks.VisibleTicks(0, 6589, 940, 0, 1, 30, out long f1, out long l1, out _);

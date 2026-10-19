@@ -92,6 +92,8 @@ namespace QuickLook.Plugin.AudioViewer.Controls
             double widest = Text(AxisTicks.FormatTime(_duration, decimals), dpi).Width;
             AxisTicks.VisibleTicks(_duration, _timelineWidth, w, _scrollOffset, step, widest,
                 out long first, out long lastIndex, out int stride);
+            long finalIndex = (long)Math.Floor(_duration / step + 1e-9);
+            double prevRight = double.NegativeInfinity;
 
             for (long i = first; i <= lastIndex; i++)
             {
@@ -102,13 +104,11 @@ namespace QuickLook.Plugin.AudioViewer.Controls
                 if (i % stride != 0) continue;
 
                 var ft = Text(AxisTicks.FormatTime(t, decimals), dpi);
-                double tx = x + 2;
+                double? tx = AxisTicks.LabelLeft(x, ft.Width, w, i == finalIndex, prevRight);
+                if (tx == null) continue;
 
-                // Keep the file's final label on screen when its tick lands on the very edge;
-                // every other label stays with its own tick and clips like the content does.
-                if (i == lastIndex && tx + ft.Width > w) tx = w - ft.Width;
-
-                dc.DrawText(ft, new Point(Math.Max(0, tx), 4));
+                dc.DrawText(ft, new Point(tx.Value, 4));
+                prevRight = tx.Value + ft.Width;
             }
         }
 

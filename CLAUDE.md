@@ -81,6 +81,15 @@ be linked from `README.md` — the link would be dead for anyone cloning the rep
   mono/stereo, vertical lanes for multichannel. Alt+wheel is amplitude zoom,
   Shift+wheel forces the time axis, and Ctrl is deliberately left free for a
   future time zoom.
+- **Arrow keys belong to Explorer.** QuickLook opens its window with
+  `ShowActivated="False"`. The arrows move Explorer's selection, and the host's
+  keyboard hook sends a Switch message that re-reads that selection. Never call
+  `Focus()` unprompted (on load, or from an event that can fire while Explorer
+  is active), because it activates the QuickLook window and arrow switching stops.
+  Media keys therefore only work after the user clicks the preview. The root also
+  turns off directional navigation, and every main-pane control is
+  `Focusable="False"`. A new control outside the settings popup needs the same
+  attribute.
 - **Hover "Level" is not dBFS.** It is the raw modulus of a windowed FFT bin,
   unnormalised and with no reference, so it is a relative figure — and it is not
   clamped to the contrast floor, so it can read far below it.

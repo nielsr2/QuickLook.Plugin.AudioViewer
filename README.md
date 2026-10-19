@@ -29,7 +29,8 @@ A gear (⚙) button in the toolbar opens a settings flyout. All choices persist:
 
 - **Layout** — *Stacked* (waveform above spectrogram, the default) or *Single view*
   (a button toggles between the full-area waveform and spectrogram).
-- **Frequency scale** — Linear, Log, or Mel.
+- **Frequency scale** — Linear, Log, or Mel. The active frequency and amplitude scales
+  are shown in the plot's bottom corners; click either to cycle it.
 - **Amplitude** — Decibel (dB) or Linear.
 - **Colormap** — Magma, Viridis, Grayscale, Inferno, Plasma, Turbo, or Heat (RX-style).
 - **Reverse colormap** — flip any map light-based (for print / light backgrounds).
@@ -66,7 +67,8 @@ to jump to a position.
 
 ## Keyboard shortcuts
 
-When the preview has focus:
+When the preview has focus (click it first: on open, Explorer keeps the keyboard, so the
+arrow keys switch files):
 
 | Key | Action |
 | --- | --- |

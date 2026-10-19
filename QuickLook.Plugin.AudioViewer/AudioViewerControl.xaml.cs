@@ -65,6 +65,10 @@ namespace QuickLook.Plugin.AudioViewer
         // Vertical magnification of the waveform. Session-only and deliberately not
         // persisted: it belongs to the file being viewed, not to the user.
         private double _waveformGain = 1.0;
+        // Segoe MDL2 Assets, like the mute and settings buttons: E768 = play, E769 = pause.
+        private const string PlayGlyph = "";
+        private const string PauseGlyph = "";
+
         private bool _suppressGainSlider;   // guards the slider against our own writes
 
         // Cached linear STFT frames so setting changes re-render without re-running
@@ -519,7 +523,10 @@ namespace QuickLook.Plugin.AudioViewer
 
                 if (PluginSettings.AutoPlay) TogglePlay(true);
 
-                Focus(); // keyboard focus for media-key shortcuts, before the background scan
+                // No Focus() here. QuickLook opens its window with ShowActivated="False" so
+                // Explorer keeps the keyboard: the arrow keys move Explorer's selection and
+                // QuickLook follows it. Taking focus would activate our window and the arrows
+                // would stop switching files. Media keys work once the user clicks the preview.
 
                 // Phase 2 (background): the slow full-file waveform scan, delivered progressively.
                 // Its own stream (disposed by the using); playbackStream is owned by _player now.
@@ -651,8 +658,8 @@ namespace QuickLook.Plugin.AudioViewer
             if (_player == null) return;
             // Pressing play is an explicit "show me what is happening", so resume following
             // even if the user had scrolled elsewhere while paused.
-            if (play) { _userScrolled = false; _player.Play(); PlayPauseButton.Content = "⏸"; }
-            else { _player.Pause(); PlayPauseButton.Content = "▶"; }
+            if (play) { _userScrolled = false; _player.Play(); PlayPauseButton.Content = PauseGlyph; }
+            else { _player.Pause(); PlayPauseButton.Content = PlayGlyph; }
         }
 
         private void OnPlaybackStopped()
@@ -660,7 +667,7 @@ namespace QuickLook.Plugin.AudioViewer
             if (_unloaded || _player == null) return; // event can arrive during teardown
             // reached end (or stopped): reset button glyph
             if (_player.Position >= _player.Duration - TimeSpan.FromMilliseconds(100))
-                PlayPauseButton.Content = "▶";
+                PlayPauseButton.Content = PlayGlyph;
         }
 
         private void SeekSlider_DragStarted(object sender, DragStartedEventArgs e) => _scrubbing = true;
@@ -741,9 +748,19 @@ namespace QuickLook.Plugin.AudioViewer
             SeekTo(Math.Min(1.0, Math.Max(0.0, frac)));
         }
 
+        // A settings combo/slider kept focus while the popup was open; hand it back so the
+        // media keys work again and arrows can't be eaten by a now-hidden control.
+        // Only while our window is active: the popup also closes when the user clicks back into
+        // Explorer, and focusing then would re-activate this window and steal the keyboard.
+        private void SettingsPopup_Closed(object sender, EventArgs e)
+        {
+            if (Window.GetWindow(this)?.IsActive == true) Focus();
+        }
+
         // Media-player keys chosen to NOT collide with QuickLook host gestures (Space
         // toggles the preview; arrow keys navigate files in Explorer). Unhandled keys
-        // bubble up to the host untouched.
+        // bubble up to the host untouched. Arrows must never be handled here — and see
+        // the root of AudioViewerControl.xaml for why nothing else may grab them either.
         private void OnPreviewKeyDown(object sender, KeyEventArgs e)
         {
             // Note-layer editing keys, handled before the media keys so they take precedence when
@@ -1047,6 +1064,33 @@ namespace QuickLook.Plugin.AudioViewer
             PluginSettings.AmpScale = (AmplitudeScale)AmpCombo.SelectedIndex;
             RenderSpectrogram();
         }
+
+        // The corner badges cycle through the settings combos rather than writing the setting
+        // themselves, so the combo, the saved setting and the badge cannot drift apart.
+        private void FreqScaleBadge_Click(object sender, MouseButtonEventArgs e)
+        {
+            FreqCombo.SelectedIndex = ScaleBadge.Next(FreqCombo.SelectedIndex, FreqCombo.Items.Count);
+            e.Handled = true;
+        }
+
+        private void AmpScaleBadge_Click(object sender, MouseButtonEventArgs e)
+        {
+            AmpCombo.SelectedIndex = ScaleBadge.Next(AmpCombo.SelectedIndex, AmpCombo.Items.Count);
+            e.Handled = true;
+        }
+
+        private void UpdateScaleBadges()
+        {
+            FreqScaleBadge.Text = ScaleBadge.Short(PluginSettings.FreqScale);
+            FreqScaleBadge.ToolTip = $"Frequency scale: {ComboText(FreqCombo)} (click to change)";
+            AmpScaleBadge.Text = ScaleBadge.Short(PluginSettings.AmpScale);
+            AmpScaleBadge.ToolTip = $"Amplitude scale: {ComboText(AmpCombo)} (click to change)";
+            FreqScaleBadge.Visibility = Visibility.Visible;
+            AmpScaleBadge.Visibility = Visibility.Visible;
+        }
+
+        private static string ComboText(ComboBox combo) =>
+            (combo.SelectedItem as ComboBoxItem)?.Content as string ?? "";
 
         private void ColorCombo_Changed(object sender, SelectionChangedEventArgs e)
         {
@@ -1423,6 +1467,8 @@ namespace QuickLook.Plugin.AudioViewer
             {
                 FreqRuler.Visibility = Visibility.Collapsed;
                 Colorbar.Visibility = Visibility.Collapsed;
+                FreqScaleBadge.Visibility = Visibility.Collapsed;
+                AmpScaleBadge.Visibility = Visibility.Collapsed;
                 RefreshNotes(); // keep the overlay/toolbar in step (hidden while the spectrogram is off)
                 return;
             }
@@ -1435,6 +1481,7 @@ namespace QuickLook.Plugin.AudioViewer
                 ThemePalette.ResolveReverse(PluginSettings.ReverseMode, _isDark), PluginSettings.Gamma);
             FreqRuler.Visibility = Visibility.Visible;
             Colorbar.Visibility = Visibility.Visible;
+            UpdateScaleBadges();
             RefreshNotes(); // re-align the note overlay on the same scale/fMin/fMax
         }
 
